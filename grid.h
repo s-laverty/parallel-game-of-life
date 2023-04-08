@@ -24,23 +24,31 @@ typedef struct
 } GridView;
 
 /**
- * @brief Get the effective width of a grid view (including 1-cell padding).
+ * @brief Get the width of a grid view (not including 1-cell padding).
  *
  * @param view The grid view.
  * @return size_t
  */
-inline size_t padded_width(GridView *view)
+inline size_t width(GridView *view)
 {
-    return view->col_end - view->col_start + 2;
+#if WRAP_GRID
+    return (NUM_COLS + view->col_end - view->col_start) % NUM_COLS;
+#else
+    return view->col_end - view->col_start;
+#endif
 }
 
 /**
- * @brief Get the effective height of a grid view (including 1-cell padding).
+ * @brief Get the height of a grid view (not including 1-cell padding).
  *
  * @param view The grid view.
  * @return size_t
  */
-inline size_t padded_height(GridView *view)
+inline size_t height(GridView *view)
 {
-    return view->row_end - view->row_start + 2;
+#if WRAP_GRID
+    return (NUM_ROWS + view->row_end - view->row_start) % NUM_ROWS
+#else
+    return view->row_end - view->row_start;
+#endif
 }
