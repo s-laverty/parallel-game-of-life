@@ -3,7 +3,7 @@
 
 #define NUM_ROWS 32768 // 2^15
 #define NUM_COLS 32768 // 2^15
-#define WRAP_GRID true
+#define WRAP_GLOBAL_GRID true
 
 /** Game of life cell data. Indexed as [row][col]. */
 typedef bool **Grid;
@@ -15,11 +15,11 @@ typedef bool **Grid;
  * @param src The source grid.
  * @param row_idx The index of the row to copy from.
  * @param col_start The column index to start copying from.
- * @param col_end Copy up to, but not including this column index.
+ * @param width How many cells to copy.
  */
-inline void get_row(bool *dest, const Grid src, size_t row_idx, size_t col_start, size_t col_end)
+inline void get_row(bool *dest, const Grid src, size_t row_idx, size_t col_start, size_t width)
 {
-    memcpy(dest, src[row_idx] + col_start, (col_end - col_start) * sizeof(bool));
+    memcpy(dest, src[row_idx] + col_start, width * sizeof(bool));
 }
 
 /**
@@ -29,11 +29,11 @@ inline void get_row(bool *dest, const Grid src, size_t row_idx, size_t col_start
  * @param src The source buffer.
  * @param row_idx The index of the row to copy to.
  * @param col_start The column index to start copying to.
- * @param col_end Copy up to, but not including this column index.
+ * @param width How many cells to copy.
  */
-inline void set_row(Grid dest, const bool *src, size_t row_idx, size_t col_start, size_t col_end)
+inline void set_row(Grid dest, const bool *src, size_t row_idx, size_t col_start, size_t width)
 {
-    memcpy(dest[row_idx] + col_start, src, (col_end - col_start) * sizeof(bool));
+    memcpy(dest[row_idx] + col_start, src, width * sizeof(bool));
 }
 
 /**
@@ -43,12 +43,12 @@ inline void set_row(Grid dest, const bool *src, size_t row_idx, size_t col_start
  * @param src The source grid.
  * @param col_idx The index of the column to copy from.
  * @param row_start The row index to start copying from.
- * @param row_end Copy up to, but not including this row index.
+ * @param height How many cells to copy.
  */
-inline void get_col(bool *dest, const Grid src, size_t col_idx, size_t row_start, size_t row_end)
+inline void get_col(bool *dest, const Grid src, size_t col_idx, size_t row_start, size_t height)
 {
-    for (size_t i = row_start; i < row_end; i++)
-        dest[i - row_start] = src[i][col_idx];
+    for (size_t i = 0; i < height; i++)
+        dest[i] = src[row_start + i][col_idx];
 }
 
 /**
@@ -58,55 +58,25 @@ inline void get_col(bool *dest, const Grid src, size_t col_idx, size_t row_start
  * @param src The source buffer.
  * @param col_idx The index of the column to copy to.
  * @param row_start The row index to start copying to.
- * @param row_end Copy up to, but not including this row index.
+ * @param height How many cells to copy.
  */
-inline void set_col(Grid dest, const bool *src, size_t col_idx, size_t row_start, size_t row_end)
+inline void set_col(Grid dest, const bool *src, size_t col_idx, size_t row_start, size_t height)
 {
-    for (size_t i = row_start; i < row_end; i++)
-        dest[i][col_idx] = src[i - row_start];
+    for (size_t i = 0; i < height; i++)
+        dest[row_start + i][col_idx] = src[i];
 }
 
-/** A view of the global data grid. */
+/** A rectangular view of the global data grid with 1-cell padding. */
 typedef struct
 {
     /** Data in the grid view. */
     Grid grid;
-    /** Row index of the local grid view. */
+    /** Starting row index of the grid view. */
     size_t row_start;
-    /** Grid view continues up to, but not including, this row index. */
-    size_t row_end;
-    /** Column index of the local grid view. */
+    /** Number of rows in the grid view. */
+    size_t width;
+    /** Starting column index of the grid view. */
     size_t col_start;
-    /** Grid view continues up to, but not including, this column index. */
-    size_t col_end;
+    /** Number of columns in the grid view. */
+    size_t height;
 } GridView;
-
-/**
- * @brief Get the width of a grid view (not including 1-cell padding).
- *
- * @param view The grid view.
- * @return size_t
- */
-inline size_t view_width(const GridView *view)
-{
-#if WRAP_GRID
-    return (NUM_COLS + view->col_end - view->col_start) % NUM_COLS;
-#else
-    return view->col_end - view->col_start;
-#endif
-}
-
-/**
- * @brief Get the height of a grid view (not including 1-cell padding).
- *
- * @param view The grid view.
- * @return size_t
- */
-inline size_t view_height(const GridView *view)
-{
-#if WRAP_GRID
-    return (NUM_ROWS + view->row_end - view->row_start) % NUM_ROWS;
-#else
-    return view->row_end - view->row_start;
-#endif
-}
