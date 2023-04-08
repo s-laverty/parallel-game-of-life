@@ -8,6 +8,34 @@
 /** Game of life cell data. Indexed as [row][col]. */
 typedef bool **Grid;
 
+/**
+ * @brief Copy a grid column to a destination buffer.
+ *
+ * @param dest The destination buffer.
+ * @param src The source grid.
+ * @param height The height of the grid.
+ * @param col_idx The index of the column to copy from.
+ */
+inline void get_col(bool *dest, const Grid *src, size_t height, size_t col_idx)
+{
+    for (size_t i = 0; i < height; i++)
+        dest[i] = src[i][col_idx];
+}
+
+/**
+ * @brief Copy a source buffer to a grid column.
+ *
+ * @param dest The destination grid.
+ * @param src The source buffer.
+ * @param height The height of the grid.
+ * @param col_idx The index of the column to copy to.
+ */
+inline void set_col(Grid *dest, const bool *src, size_t height, size_t col_idx)
+{
+    for (size_t i = 0; i < height; i++)
+        dest[i][col_idx] = src[i];
+}
+
 /** A view of the global data grid. */
 typedef struct
 {
@@ -29,7 +57,7 @@ typedef struct
  * @param view The grid view.
  * @return size_t
  */
-inline size_t width(const GridView *view)
+inline size_t view_width(const GridView *view)
 {
 #if WRAP_GRID
     return (NUM_COLS + view->col_end - view->col_start) % NUM_COLS;
@@ -44,7 +72,7 @@ inline size_t width(const GridView *view)
  * @param view The grid view.
  * @return size_t
  */
-inline size_t height(const GridView *view)
+inline size_t view_height(const GridView *view)
 {
 #if WRAP_GRID
     return (NUM_ROWS + view->row_end - view->row_start) % NUM_ROWS;
