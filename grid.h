@@ -73,10 +73,10 @@ typedef struct
     Grid grid;
     /** Starting global row index of the grid view. */
     size_t row_start;
-    /** Number of rows in the grid view (NOT including 1-cell offset). */
+    /** Number of rows in the grid view (NOT including 1-cell padding). */
     size_t width;
     /** Starting global column index of the grid view. */
     size_t col_start;
-    /** Number of columns in the grid view (NOT including 1-cell offset). */
+    /** Number of columns in the grid view (NOT including 1-cell padding). */
     size_t height;
 } GridView;
