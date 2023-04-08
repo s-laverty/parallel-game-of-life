@@ -5,10 +5,10 @@
 #define NUM_COLS 32768 // 2^15
 #define WRAP_GRID true
 
-/** A view of the global data grid. Indexed as [row][col]. */
+/** Game of life cell data. Indexed as [row][col]. */
 typedef bool **Grid;
 
-/** The bounds of a global data grid view. */
+/** A view of the global data grid. */
 typedef struct
 {
     /** Data in the grid view. */
@@ -26,7 +26,7 @@ typedef struct
 /**
  * @brief Get the effective width of a grid view (including 1-cell padding).
  *
- * @param view the grid view.
+ * @param view The grid view.
  * @return size_t
  */
 inline size_t padded_width(GridView *view)
@@ -37,7 +37,7 @@ inline size_t padded_width(GridView *view)
 /**
  * @brief Get the effective height of a grid view (including 1-cell padding).
  *
- * @param view the grid view.
+ * @param view The grid view.
  * @return size_t
  */
 inline size_t padded_height(GridView *view)
