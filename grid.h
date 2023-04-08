@@ -16,7 +16,7 @@ typedef bool **Grid;
  * @param height The height of the grid.
  * @param col_idx The index of the column to copy from.
  */
-inline void get_col(bool *dest, const Grid *src, size_t height, size_t col_idx)
+inline void get_col(bool *dest, const Grid src, size_t height, size_t col_idx)
 {
     for (size_t i = 0; i < height; i++)
         dest[i] = src[i][col_idx];
@@ -30,7 +30,7 @@ inline void get_col(bool *dest, const Grid *src, size_t height, size_t col_idx)
  * @param height The height of the grid.
  * @param col_idx The index of the column to copy to.
  */
-inline void set_col(Grid *dest, const bool *src, size_t height, size_t col_idx)
+inline void set_col(Grid dest, const bool *src, size_t height, size_t col_idx)
 {
     for (size_t i = 0; i < height; i++)
         dest[i][col_idx] = src[i];
