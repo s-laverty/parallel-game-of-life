@@ -3,7 +3,7 @@
 
 #define NUM_ROWS 32768 // 2^15
 #define NUM_COLS 32768 // 2^15
-#define WRAP_GRID false
+#define WRAP_GRID true
 
 /** A view of the global data grid. Indexed as [row][col]. */
 typedef bool **Grid;
@@ -27,7 +27,7 @@ typedef struct
  * @param dims the grid view dimensions.
  * @return int
  */
-inline size_t width(GridDims *dims)
+inline size_t padded_width(GridDims *dims)
 {
     return dims->col_end - dims->col_start + 2;
 }
@@ -38,7 +38,7 @@ inline size_t width(GridDims *dims)
  * @param dims the grid view dimensions.
  * @return int
  */
-inline size_t height(GridDims *dims)
+inline size_t padded_height(GridDims *dims)
 {
     return dims->row_end - dims->row_start + 2;
 }
