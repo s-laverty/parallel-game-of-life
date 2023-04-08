@@ -29,7 +29,7 @@ typedef struct
  * @param view The grid view.
  * @return size_t
  */
-inline size_t width(GridView *view)
+inline size_t width(const GridView *view)
 {
 #if WRAP_GRID
     return (NUM_COLS + view->col_end - view->col_start) % NUM_COLS;
@@ -44,7 +44,7 @@ inline size_t width(GridView *view)
  * @param view The grid view.
  * @return size_t
  */
-inline size_t height(GridView *view)
+inline size_t height(const GridView *view)
 {
 #if WRAP_GRID
     return (NUM_ROWS + view->row_end - view->row_start) % NUM_ROWS;
