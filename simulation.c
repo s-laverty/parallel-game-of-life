@@ -95,21 +95,25 @@ void exchange_border_cells_striped(const GridView *view, const GridViewNeighbors
               neighbors->comm,
               send_requests + 1);
 
+#if WRAP_GLOBAL_GRID
     // Copy left-right borders to padding.
     for (size_t i = 1; i <= view->height; i++)
     {
         view->grid[i][0] = view->grid[i][view->width];
         view->grid[i][view->width + 1] = view->grid[i][1];
     }
+#endif
 
     // Wait for recv requests to complete.
     MPI_Waitall(2, recv_requests, MPI_STATUSES_IGNORE);
 
+#if WRAP_GLOBAL_GRID
     // Copy padding to corners.
     view->grid[0][0] = view->grid[0][view->width];
     view->grid[0][view->width + 1] = view->grid[0][1];
     view->grid[view->height + 1][0] = view->grid[view->height + 1][view->width];
     view->grid[view->height + 1][view->width + 1] = view->grid[view->height + 1][1];
+#endif
 
     // Wait for send requests to complete.
     MPI_Waitall(2, send_requests, MPI_STATUSES_IGNORE);
