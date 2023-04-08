@@ -47,7 +47,7 @@ inline size_t width(GridView *view)
 inline size_t height(GridView *view)
 {
 #if WRAP_GRID
-    return (NUM_ROWS + view->row_end - view->row_start) % NUM_ROWS
+    return (NUM_ROWS + view->row_end - view->row_start) % NUM_ROWS;
 #else
     return view->row_end - view->row_start;
 #endif
