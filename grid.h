@@ -11,6 +11,8 @@ typedef bool **Grid;
 /** The bounds of a global data grid view. */
 typedef struct
 {
+    /** Data in the grid view. */
+    Grid grid;
     /** Row index of the local grid view. */
     size_t row_start;
     /** Grid view continues up to, but not including, this row index. */
@@ -19,26 +21,26 @@ typedef struct
     size_t col_start;
     /** Grid view continues up to, but not including, this column index. */
     size_t col_end;
-} GridDims;
+} GridView;
 
 /**
  * @brief Get the effective width of a grid view (including 1-cell padding).
  *
- * @param dims the grid view dimensions.
- * @return int
+ * @param view the grid view.
+ * @return size_t
  */
-inline size_t padded_width(GridDims *dims)
+inline size_t padded_width(GridView *view)
 {
-    return dims->col_end - dims->col_start + 2;
+    return view->col_end - view->col_start + 2;
 }
 
 /**
  * @brief Get the effective height of a grid view (including 1-cell padding).
  *
- * @param dims the grid view dimensions.
- * @return int
+ * @param view the grid view.
+ * @return size_t
  */
-inline size_t padded_height(GridDims *dims)
+inline size_t padded_height(GridView *view)
 {
-    return dims->row_end - dims->row_start + 2;
+    return view->row_end - view->row_start + 2;
 }
