@@ -25,10 +25,10 @@ typedef struct
 } Grid;
 
 /**
- * @brief Get a pointer to a row grid row.
+ * @brief Get a pointer to a grid row.
  * 
  * @param grid The grid.
- * @param row_idx The index of the road.
+ * @param row_idx The index of the row.
  * @return bool *
  */
 inline bool *row_ptr(const Grid *grid, size_t row_idx)
@@ -75,8 +75,8 @@ inline void set_row(Grid *dest, const bool *src, size_t row_idx, size_t col_star
  */
 inline void get_col(bool *dest, const Grid *src, size_t col_idx, size_t row_start, size_t length)
 {
-    for (size_t i = 0, j = row_start * src->width + col_idx; i < length; i++, j += src->width)
-        dest[i] = src->data[j];
+    for (size_t i = 0; i < length; i++)
+        dest[i] = row_ptr(src, row_start + i)[col_idx];
 }
 
 /**
@@ -90,8 +90,8 @@ inline void get_col(bool *dest, const Grid *src, size_t col_idx, size_t row_star
  */
 inline void set_col(Grid *dest, const bool *src, size_t col_idx, size_t row_start, size_t length)
 {
-    for (size_t i = 0, j = row_start * dest->width + col_idx; i < length; i++, j += dest->width)
-        dest->data[j] = src[i];
+    for (size_t i = 0; i < length; i++)
+        row_ptr(dest, row_start + i)[col_idx] = src[i];
 }
 
 /** A rectangular view of the global data grid with 1-cell padding. */

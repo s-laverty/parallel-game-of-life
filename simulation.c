@@ -14,7 +14,18 @@
 #include "clockcycle.h"
 #include "grid.h"
 
-#define CELL_EXCHANGE_TAG 0
+/** Border cell exchange tags. Relative position of receiver. */
+enum
+{
+    EXCHANGE_TAG_ABOVE,
+    EXCHANGE_TAG_BELOW,
+    EXCHANGE_TAG_ABOVE_LEFT,
+    EXCHANGE_TAG_ABOVE_RIGHT,
+    EXCHANGE_TAG_LEFT,
+    EXCHANGE_TAG_RIGHT,
+    EXCHANGE_TAG_BELOW_LEFT,
+    EXCHANGE_TAG_BELOW_RIGHT
+};
 
 /** The communicator and ranks of neighboring grid views using a horizontal striped layout. */
 typedef struct
@@ -64,43 +75,46 @@ void exchange_border_cells_striped(const GridView *view, const GridViewNeighbors
     MPI_Request send_requests[2];
 
     // Make receive requests.
-    MPI_Irecv(view->grid[0] + 1,
+    MPI_Irecv(row_ptr(view->grid, 0) + 1,
               view->width,
               MPI_C_BOOL,
               neighbors->above,
-              CELL_EXCHANGE_TAG,
+              EXCHANGE_TAG_BELOW,
               neighbors->comm,
               recv_requests + 0);
-    MPI_Irecv(view->grid[view->height + 1] + 1,
+    MPI_Irecv(row_ptr(view->grid, view->height + 1) + 1,
               view->width,
               MPI_C_BOOL,
               neighbors->below,
-              CELL_EXCHANGE_TAG,
+              EXCHANGE_TAG_ABOVE,
               neighbors->comm,
               recv_requests + 1);
 
     // Make send requests.
-    MPI_Isend(view->grid[1] + 1,
+    MPI_Isend(row_ptr(view->grid, 1) + 1,
               view->width,
               MPI_C_BOOL,
               neighbors->above,
-              CELL_EXCHANGE_TAG,
+              EXCHANGE_TAG_ABOVE,
               neighbors->comm,
               send_requests + 0);
-    MPI_Isend(view->grid[view->height] + 1,
+    MPI_Isend(row_ptr(view->grid, view->height) + 1,
               view->width,
               MPI_C_BOOL,
               neighbors->below,
-              CELL_EXCHANGE_TAG,
+              EXCHANGE_TAG_BELOW,
               neighbors->comm,
               send_requests + 1);
 
 #if WRAP_GLOBAL_GRID
-    // Copy left-right borders to padding.
-    for (size_t i = 1; i <= view->height; i++)
     {
-        view->grid[i][0] = view->grid[i][view->width];
-        view->grid[i][view->width + 1] = view->grid[i][1];
+        // Copy left-right borders to padding.
+        bool *row = row_ptr(view->grid, 1);
+        for (size_t i = 0; i < view->height; i++, row += view->grid->width)
+        {
+            row[0] = row[view->width];
+            row[view->width + 1] = row[1];
+        }
     }
 #endif
 
@@ -108,11 +122,15 @@ void exchange_border_cells_striped(const GridView *view, const GridViewNeighbors
     MPI_Waitall(2, recv_requests, MPI_STATUSES_IGNORE);
 
 #if WRAP_GLOBAL_GRID
-    // Copy padding to corners.
-    view->grid[0][0] = view->grid[0][view->width];
-    view->grid[0][view->width + 1] = view->grid[0][1];
-    view->grid[view->height + 1][0] = view->grid[view->height + 1][view->width];
-    view->grid[view->height + 1][view->width + 1] = view->grid[view->height + 1][1];
+    {
+        // Copy padding to corners.
+        bool *row = row_ptr(view->grid, 0);
+        row[0] = row[view->width];
+        row[view->width + 1] = row[1];
+        row = row_ptr(view->grid, view->height + 1);
+        row[0] = row[view->width];
+        row[view->width + 1] = row[1];
+    }
 #endif
 
     // Wait for send requests to complete.
@@ -149,90 +167,90 @@ void exchange_border_cells_brick(const GridView *view, const GridViewNeighborsBr
     }
 
     // Make receive requests.
-    MPI_Irecv(view->grid[0],
+    MPI_Irecv(row_ptr(view->grid, 0),
               neighbors->above_align + 1,
               MPI_C_BOOL,
               neighbors->above_left,
-              CELL_EXCHANGE_TAG,
+              EXCHANGE_TAG_BELOW_RIGHT,
               neighbors->comm,
               recv_requests + 0);
-    MPI_Irecv(view->grid[0] + neighbors->above_align + 1,
+    MPI_Irecv(row_ptr(view->grid, 0) + neighbors->above_align + 1,
               view->width + 1 - neighbors->above_align,
               MPI_C_BOOL,
               neighbors->above_right,
-              CELL_EXCHANGE_TAG,
+              EXCHANGE_TAG_BELOW_LEFT,
               neighbors->comm,
               recv_requests + 1);
     MPI_Irecv(left_recv_buf,
               view->height,
               MPI_C_BOOL,
               neighbors->left,
-              CELL_EXCHANGE_TAG,
+              EXCHANGE_TAG_RIGHT,
               neighbors->comm,
               recv_requests + 2);
     MPI_Irecv(right_recv_buf,
               view->height,
               MPI_C_BOOL,
               neighbors->right,
-              CELL_EXCHANGE_TAG,
+              EXCHANGE_TAG_LEFT,
               neighbors->comm,
               recv_requests + 3);
-    MPI_Irecv(view->grid[view->height + 1],
+    MPI_Irecv(row_ptr(view->grid, view->height + 1),
               neighbors->below_align + 1,
               MPI_C_BOOL,
               neighbors->below_left,
-              CELL_EXCHANGE_TAG,
+              EXCHANGE_TAG_ABOVE_RIGHT,
               neighbors->comm,
               recv_requests + 4);
-    MPI_Irecv(view->grid[view->height + 1] + neighbors->below_align + 1,
+    MPI_Irecv(row_ptr(view->grid, view->height + 1) + neighbors->below_align + 1,
               view->width + 1 - neighbors->below_align,
               MPI_C_BOOL,
               neighbors->below_right,
-              CELL_EXCHANGE_TAG,
+              EXCHANGE_TAG_ABOVE_LEFT,
               neighbors->comm,
               recv_requests + 5);
 
     // Make send requests.
-    MPI_Isend(view->grid[1] + 1,
+    MPI_Isend(row_ptr(view->grid, 1) + 1,
               neighbors->above_align + 1,
               MPI_C_BOOL,
               neighbors->above_left,
-              CELL_EXCHANGE_TAG,
+              EXCHANGE_TAG_ABOVE_LEFT,
               neighbors->comm,
               send_requests + 0);
-    MPI_Isend(view->grid[1] + neighbors->above_align,
+    MPI_Isend(row_ptr(view->grid, 1) + neighbors->above_align,
               view->width + 1 - neighbors->above_align,
               MPI_C_BOOL,
               neighbors->above_right,
-              CELL_EXCHANGE_TAG,
+              EXCHANGE_TAG_ABOVE_RIGHT,
               neighbors->comm,
               send_requests + 1);
     MPI_Isend(left_send_buf,
               view->height,
               MPI_C_BOOL,
               neighbors->left,
-              CELL_EXCHANGE_TAG,
+              EXCHANGE_TAG_LEFT,
               neighbors->comm,
               send_requests + 2);
     MPI_Isend(right_send_buf,
               view->height,
               MPI_C_BOOL,
               neighbors->right,
-              CELL_EXCHANGE_TAG,
+              EXCHANGE_TAG_RIGHT,
               neighbors->comm,
               send_requests + 3);
-    MPI_Isend(view->grid[view->height] + 1,
+    MPI_Isend(row_ptr(view->grid, view->height) + 1,
               neighbors->below_align + 1,
               MPI_C_BOOL,
               neighbors->below_left,
-              CELL_EXCHANGE_TAG,
+              EXCHANGE_TAG_BELOW_LEFT,
               neighbors->comm,
               send_requests + 4);
-    MPI_Isend(view->grid[view->height] + neighbors->below_align,
+    MPI_Isend(row_ptr(view->grid, view->height) + neighbors->below_align,
               view->width + 1 - neighbors->below_align,
               MPI_C_BOOL,
               neighbors->below_right,
-              CELL_EXCHANGE_TAG,
+              EXCHANGE_TAG_BELOW_RIGHT,
               neighbors->comm,
               send_requests + 5);
 
