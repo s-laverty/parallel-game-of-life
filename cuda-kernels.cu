@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-//#include "clockcycle.h"
+#include "clockcycle.h"
 
 #define threads_per_block 10
 #define WIDTH 10
@@ -24,19 +24,50 @@ bool board[WIDTH][HEIGHT] = {
 };
 bool output_board[WIDTH][HEIGHT];
 
-//TODO: get it actually working
 //TODO: wrap around
+//TODO: is there a faster way to count number of neighbors?
 //TODO: test with double pointer allocation as in here: https://stackoverflow.com/questions/59162457/allocate-a-2d-vector-in-unified-memory-cuda-c-c
-//		and show that it is slower to do it like that than with the "real" 2D array
+//		and make sure it's actually slower to do it like that than with the non-dynamically allocated 2D array 
 //TODO: pipelined kernel that will pipeline time steps
 //		each thread waits until neighbors are at same generation as itself before continuing, work on calculating multiple generations at once
+
+/**
+ * @brief Device helper function for getting data from 
+ * linearized 2D array
+ *
+ * @param arr Array pointer
+ * @param r Row index
+ * @param c Column index
+ * @param pitch Mem allocation pitch
+ */
+__device__ bool getData(bool* arr, int r, int c, int pitch){
+	bool* row_start = (bool*)((char*)arr + r * pitch);
+	return row_start[c];
+}
+
+/**
+ * @brief Device helper function for setting data in
+ * linearized 2D array
+ *
+ * @param arr Array pointer
+ * @param r Row index
+ * @param c Column index
+ * @param pitch Mem allocation pitch
+ * @param val Value to set
+ */
+__device__ void setData(bool* arr, int r, int c, int pitch, bool val){
+	bool* row_start = (bool*)((char*)arr + r * pitch);
+	row_start[c] = val;
+}
 
 /**
  * @brief Compute 1 time step for a given section of the grid.
  * Each thread computes 1 cell.
  *
  * @param grid Current state of grid section (input)
+ * @param pitch1 Grid memory allocation pitch
  * @param next_grid Next time step state of grid section (output)
+ * @param pitch2 Next_grid memory allocation pitch
  * @param width Grid width
  * @param height Grid height
  */
@@ -45,64 +76,42 @@ __global__ void compute_timestep(bool* grid, size_t pitch1, bool* next_grid, siz
   unsigned int i = blockIdx.x*blockDim.x + threadIdx.x; 
   unsigned int col = i % width;
   unsigned int row = i / height;
-
-	//TEST - for now, everybody toggle your spot
-		bool* row_start = (bool*)((char*)grid + row * pitch1);
-		bool column_element = row_start[col];
-		//if (column_element == true){
-		//	row_start[10000] = 10;
-		//}
-
-		bool* r_start = (bool*)((char*)next_grid + row * pitch2);
-		r_start[col] = !column_element;
-
-
-  /*
+  
   // count the num of alive cells surrounding 
-  // TODO: more efficient way to do this?? some way to not double-count?? ie each cell is being counted by 9 surrounding threads
   unsigned int surrounding_population = 0;
   if (row > 0){
-	  if (col > 0 && grid[row-1][col-1] ){
+	  if (col > 0 && getData(grid, row-1, col-1, pitch1) ){
 		surrounding_population++;
 	  }
-	  if (grid[row-1][col]){
+	  if (getData(grid, row-1, col, pitch1)){
 	  	surrounding_population++;
 	  }
-	  if (col < width && grid[row-1][col+1]){
+	  if (col < width && getData(grid, row-1, col+1, pitch1)){
 	  	surrounding_population++;
 	  }
   }
-  if (col > 0 && grid[row][col-1]){
+  if (col > 0 && getData(grid, row, col-1, pitch1)){
   	surrounding_population++;
   }
-  if (col < width && grid[row][col+1]){
+  if (col < width && getData(grid, row, col+1, pitch1)){
   	surrounding_population++;
   }
   if (row < height){
-  	if (col > 0 && grid[row+1][col-1]){
+  	if (col > 0 && getData(grid, row+1, col-1, pitch1)){
   		surrounding_population++;
   	}
-  	if (col < width && grid[row+1][col+1] ){
+  	if (col < width && getData(grid, row+1, col+1, pitch1) ){
 		surrounding_population++;
   	}
-  	if(grid[row+1][col]){
+  	if(getData(grid, row+1, col, pitch1)){
   		surrounding_population++;
   	}
   } 
-
-  // Set next cell state (without if-statements is faster??)
-  // TODO: check whether if-statements are actually faster
-  next_grid[row][col] = (surrounding_population == 2 || (grid[row][col] && surrounding_population==3));*/
+	
+  // Set next cell state
+  bool next_cell_state = (surrounding_population == 3 || (getData(grid, row, col, pitch1) && surrounding_population==2));
+  setData(next_grid, row, col, pitch2, next_cell_state);
 }
-
-/*
-// TODO: pipelined implementation
-// compute t time steps for grid - use MPI to pipeline even with several sections????
-// should be faster than doing it 1 time step at a time
-__global__ void compute_pipelined(int* ssgl, int* sspl, int* sssgm, int* ssspm)
-{
-}
-*/
 
 // temporary main for testing CUDA kernel
 int main(int argc, char *argv[]){
