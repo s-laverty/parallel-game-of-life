@@ -4,12 +4,13 @@
 #include <stdbool.h>
 #include "clockcycle.h"
 
+#define clock_frequency 512000000
 #define threads_per_block 10
 #define WIDTH 10
 #define HEIGHT 10
 
-// contiguous allocation is better than double pointer 
-// for copying to/from CUDA
+// contiguous allocation is more efficient than double pointer 
+// for copying to/from CUDA and using on GPU
 bool board[WIDTH][HEIGHT] = {
 	{false, false, false, false, false, false, false, false, false, false},
 	{false, false, false, false, false, false, false, false, false, false},
@@ -18,16 +19,12 @@ bool board[WIDTH][HEIGHT] = {
 	{false, false, true, true, false, false, false, false, false, false},
 	{false, false, false, false, false, false, false, false, false, false},
 	{false, false, false, false, false, false, false, false, false, false},
-	{false, false, false, false, false, false, false, false, false, false},
-	{false, false, false, false, false, false, false, false, false, false},
-	{false, false, false, false, false, false, false, false, false, false},
+	{false, false, false, false, false, false, false, false, false, true},
+	{false, false, false, false, false, false, false, true, false, true},
+	{false, false, false, false, false, false, false, false, true, true},
 };
 bool output_board[WIDTH][HEIGHT];
 
-//TODO: wrap around
-//TODO: is there a faster way to count number of neighbors?
-//TODO: test with double pointer allocation as in here: https://stackoverflow.com/questions/59162457/allocate-a-2d-vector-in-unified-memory-cuda-c-c
-//		and make sure it's actually slower to do it like that than with the non-dynamically allocated 2D array 
 //TODO: pipelined kernel that will pipeline time steps
 //		each thread waits until neighbors are at same generation as itself before continuing, work on calculating multiple generations at once
 
@@ -76,37 +73,22 @@ __global__ void compute_timestep(bool* grid, size_t pitch1, bool* next_grid, siz
   unsigned int i = blockIdx.x*blockDim.x + threadIdx.x; 
   unsigned int col = i % width;
   unsigned int row = i / height;
+  // calculate wrapped-around values
+  unsigned int col_plus1 = (col < width) ? col+1 : 0;
+  unsigned int col_minus1 = (col > 0) ? col-1 : width-1;
+  unsigned int row_plus1 = (row < height) ? row+1 : 0;
+  unsigned int row_minus1 = (row > 0) ? row-1 : height-1;
   
   // count the num of alive cells surrounding 
-  unsigned int surrounding_population = 0;
-  if (row > 0){
-	  if (col > 0 && getData(grid, row-1, col-1, pitch1) ){
-		surrounding_population++;
-	  }
-	  if (getData(grid, row-1, col, pitch1)){
-	  	surrounding_population++;
-	  }
-	  if (col < width && getData(grid, row-1, col+1, pitch1)){
-	  	surrounding_population++;
-	  }
-  }
-  if (col > 0 && getData(grid, row, col-1, pitch1)){
-  	surrounding_population++;
-  }
-  if (col < width && getData(grid, row, col+1, pitch1)){
-  	surrounding_population++;
-  }
-  if (row < height){
-  	if (col > 0 && getData(grid, row+1, col-1, pitch1)){
-  		surrounding_population++;
-  	}
-  	if (col < width && getData(grid, row+1, col+1, pitch1) ){
-		surrounding_population++;
-  	}
-  	if(getData(grid, row+1, col, pitch1)){
-  		surrounding_population++;
-  	}
-  } 
+  unsigned int surrounding_population = 
+  	(unsigned int)getData(grid, row_minus1, col_minus1, pitch1) + 
+  	(unsigned int)getData(grid, row_minus1, col, pitch1) +
+  	(unsigned int)getData(grid, row_minus1, col_plus1, pitch1) + 
+  	(unsigned int)getData(grid, row, col_minus1, pitch1) + 
+  	(unsigned int)getData(grid, row, col_plus1, pitch1) +
+  	(unsigned int)getData(grid, row_plus1, col_minus1, pitch1) + 
+  	(unsigned int)getData(grid, row_plus1, col, pitch1) +
+  	(unsigned int)getData(grid, row_plus1, col_plus1, pitch1);
 	
   // Set next cell state
   bool next_cell_state = (surrounding_population == 3 || (getData(grid, row, col, pitch1) && surrounding_population==2));
@@ -125,6 +107,9 @@ int main(int argc, char *argv[]){
 	}
 	printf("\n");
 
+	unsigned long long start_cycles=clock_now(); // dummy clock reads to init
+  	unsigned long long end_cycles=clock_now();   // dummy clock reads to init
+
 	// Allocate memory in the GPU
 	bool* dev_ptr_board;
 	bool* dev_ptr_output_board;
@@ -137,13 +122,21 @@ int main(int argc, char *argv[]){
 	cudaMemcpy2D(dev_ptr_board, pitch1, board, WIDTH*sizeof(bool), WIDTH*sizeof(bool), HEIGHT, cudaMemcpyHostToDevice);
 	cudaMemcpy2D(dev_ptr_output_board, pitch2, output_board, WIDTH*sizeof(bool), WIDTH*sizeof(bool), HEIGHT, cudaMemcpyHostToDevice);
 
+	start_cycles = clock_now();
+
 	// call kernel
 	unsigned int grid_size = (HEIGHT*WIDTH) / threads_per_block;
 	compute_timestep<<<grid_size, threads_per_block>>>(dev_ptr_board, pitch1, dev_ptr_output_board, pitch2, WIDTH, HEIGHT);
 
+	end_cycles = clock_now();
+	printf("Finished in %lf\n",  ((double)(end_cycles-start_cycles))/clock_frequency);
+
 	// copy memory back
 	cudaMemcpy2D(board, WIDTH * sizeof(bool), dev_ptr_board, pitch1, WIDTH * sizeof(bool), HEIGHT, cudaMemcpyDeviceToHost);
 	cudaMemcpy2D(output_board, WIDTH * sizeof(bool), dev_ptr_output_board, pitch1, WIDTH * sizeof(bool), HEIGHT, cudaMemcpyDeviceToHost);
+
+	cudaFree(dev_ptr_board);
+	cudaFree(dev_ptr_output_board);
 
 	// debugging - print output
 	printf("\n");
