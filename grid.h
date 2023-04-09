@@ -25,6 +25,18 @@ typedef struct
 } Grid;
 
 /**
+ * @brief Get a pointer to a row grid row.
+ * 
+ * @param grid The grid.
+ * @param row_idx The index of the road.
+ * @return bool *
+ */
+inline bool *row_ptr(const Grid *grid, size_t row_idx)
+{
+    return grid->data + (row_idx * grid->width);
+}
+
+/**
  * @brief Copy a grid row to a destination buffer.
  *
  * @param dest The destination buffer.
@@ -35,7 +47,7 @@ typedef struct
  */
 inline void get_row(bool *dest, const Grid *src, size_t row_idx, size_t col_start, size_t length)
 {
-    memcpy(dest, src->data + (row_idx * src->width) + col_start, length * sizeof(bool));
+    memcpy(dest, row_ptr(src, row_idx) + col_start, length * sizeof(bool));
 }
 
 /**
@@ -49,7 +61,7 @@ inline void get_row(bool *dest, const Grid *src, size_t row_idx, size_t col_star
  */
 inline void set_row(Grid *dest, const bool *src, size_t row_idx, size_t col_start, size_t length)
 {
-    memcpy(dest->data + (row_idx * dest->width) + col_start, src, length * sizeof(bool));
+    memcpy(row_ptr(dest, row_idx) + col_start, src, length * sizeof(bool));
 }
 
 /**
