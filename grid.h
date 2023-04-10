@@ -98,7 +98,7 @@ inline void set_col(Grid *dest, const bool *src, size_t col_idx, size_t row_star
 typedef struct
 {
     /** Data in the grid view. */
-    Grid *grid;
+    Grid grid;
     /** Starting global row index of the grid view. */
     size_t row_start;
     /** Number of rows in the grid view (NOT including 1-cell padding). */

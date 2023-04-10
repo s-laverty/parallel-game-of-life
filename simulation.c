@@ -75,14 +75,14 @@ void exchange_border_cells_striped(const GridView *view, const GridViewNeighbors
     MPI_Request send_requests[2];
 
     // Make receive requests.
-    MPI_Irecv(row_ptr(view->grid, 0) + 1,
+    MPI_Irecv(row_ptr(&view->grid, 0) + 1,
               view->width,
               MPI_C_BOOL,
               neighbors->above,
               EXCHANGE_TAG_BELOW,
               neighbors->comm,
               recv_requests + 0);
-    MPI_Irecv(row_ptr(view->grid, view->height + 1) + 1,
+    MPI_Irecv(row_ptr(&view->grid, view->height + 1) + 1,
               view->width,
               MPI_C_BOOL,
               neighbors->below,
@@ -91,14 +91,14 @@ void exchange_border_cells_striped(const GridView *view, const GridViewNeighbors
               recv_requests + 1);
 
     // Make send requests.
-    MPI_Isend(row_ptr(view->grid, 1) + 1,
+    MPI_Isend(row_ptr(&view->grid, 1) + 1,
               view->width,
               MPI_C_BOOL,
               neighbors->above,
               EXCHANGE_TAG_ABOVE,
               neighbors->comm,
               send_requests + 0);
-    MPI_Isend(row_ptr(view->grid, view->height) + 1,
+    MPI_Isend(row_ptr(&view->grid, view->height) + 1,
               view->width,
               MPI_C_BOOL,
               neighbors->below,
@@ -109,8 +109,8 @@ void exchange_border_cells_striped(const GridView *view, const GridViewNeighbors
 #if WRAP_GLOBAL_GRID
     {
         // Copy left-right borders to padding.
-        bool *row = row_ptr(view->grid, 1);
-        for (size_t i = 0; i < view->height; i++, row += view->grid->width)
+        bool *row = row_ptr(&view->grid, 1);
+        for (size_t i = 0; i < view->height; i++, row += view->grid.width)
         {
             row[0] = row[view->width];
             row[view->width + 1] = row[1];
@@ -124,10 +124,10 @@ void exchange_border_cells_striped(const GridView *view, const GridViewNeighbors
 #if WRAP_GLOBAL_GRID
     {
         // Copy padding to corners.
-        bool *row = row_ptr(view->grid, 0);
+        bool *row = row_ptr(&view->grid, 0);
         row[0] = row[view->width];
         row[view->width + 1] = row[1];
-        row = row_ptr(view->grid, view->height + 1);
+        row = row_ptr(&view->grid, view->height + 1);
         row[0] = row[view->width];
         row[view->width + 1] = row[1];
     }
@@ -157,24 +157,24 @@ void exchange_border_cells_brick(const GridView *view, const GridViewNeighborsBr
     {
         left_recv_buf = (bool *)malloc(view->height * sizeof(bool));
         left_send_buf = (bool *)malloc(view->height * sizeof(bool));
-        get_col(left_send_buf, view->grid, 1, 1, view->height);
+        get_col(left_send_buf, &view->grid, 1, 1, view->height);
     }
     if (neighbors->right != MPI_PROC_NULL)
     {
         right_recv_buf = (bool *)malloc(view->height * sizeof(bool));
         right_send_buf = (bool *)malloc(view->height * sizeof(bool));
-        get_col(right_send_buf, view->grid, view->width, 1, view->height);
+        get_col(right_send_buf, &view->grid, view->width, 1, view->height);
     }
 
     // Make receive requests.
-    MPI_Irecv(row_ptr(view->grid, 0),
+    MPI_Irecv(row_ptr(&view->grid, 0),
               neighbors->above_align + 1,
               MPI_C_BOOL,
               neighbors->above_left,
               EXCHANGE_TAG_BELOW_RIGHT,
               neighbors->comm,
               recv_requests + 0);
-    MPI_Irecv(row_ptr(view->grid, 0) + neighbors->above_align + 1,
+    MPI_Irecv(row_ptr(&view->grid, 0) + neighbors->above_align + 1,
               view->width + 1 - neighbors->above_align,
               MPI_C_BOOL,
               neighbors->above_right,
@@ -195,14 +195,14 @@ void exchange_border_cells_brick(const GridView *view, const GridViewNeighborsBr
               EXCHANGE_TAG_LEFT,
               neighbors->comm,
               recv_requests + 3);
-    MPI_Irecv(row_ptr(view->grid, view->height + 1),
+    MPI_Irecv(row_ptr(&view->grid, view->height + 1),
               neighbors->below_align + 1,
               MPI_C_BOOL,
               neighbors->below_left,
               EXCHANGE_TAG_ABOVE_RIGHT,
               neighbors->comm,
               recv_requests + 4);
-    MPI_Irecv(row_ptr(view->grid, view->height + 1) + neighbors->below_align + 1,
+    MPI_Irecv(row_ptr(&view->grid, view->height + 1) + neighbors->below_align + 1,
               view->width + 1 - neighbors->below_align,
               MPI_C_BOOL,
               neighbors->below_right,
@@ -211,14 +211,14 @@ void exchange_border_cells_brick(const GridView *view, const GridViewNeighborsBr
               recv_requests + 5);
 
     // Make send requests.
-    MPI_Isend(row_ptr(view->grid, 1) + 1,
+    MPI_Isend(row_ptr(&view->grid, 1) + 1,
               neighbors->above_align + 1,
               MPI_C_BOOL,
               neighbors->above_left,
               EXCHANGE_TAG_ABOVE_LEFT,
               neighbors->comm,
               send_requests + 0);
-    MPI_Isend(row_ptr(view->grid, 1) + neighbors->above_align,
+    MPI_Isend(row_ptr(&view->grid, 1) + neighbors->above_align,
               view->width + 1 - neighbors->above_align,
               MPI_C_BOOL,
               neighbors->above_right,
@@ -239,14 +239,14 @@ void exchange_border_cells_brick(const GridView *view, const GridViewNeighborsBr
               EXCHANGE_TAG_RIGHT,
               neighbors->comm,
               send_requests + 3);
-    MPI_Isend(row_ptr(view->grid, view->height) + 1,
+    MPI_Isend(row_ptr(&view->grid, view->height) + 1,
               neighbors->below_align + 1,
               MPI_C_BOOL,
               neighbors->below_left,
               EXCHANGE_TAG_BELOW_LEFT,
               neighbors->comm,
               send_requests + 4);
-    MPI_Isend(row_ptr(view->grid, view->height) + neighbors->below_align,
+    MPI_Isend(row_ptr(&view->grid, view->height) + neighbors->below_align,
               view->width + 1 - neighbors->below_align,
               MPI_C_BOOL,
               neighbors->below_right,
@@ -260,12 +260,12 @@ void exchange_border_cells_brick(const GridView *view, const GridViewNeighborsBr
     // Copy from and free recv buffers.
     if (neighbors->left != MPI_PROC_NULL)
     {
-        set_col(view->grid, left_recv_buf, 0, 1, view->height);
+        set_col(&view->grid, left_recv_buf, 0, 1, view->height);
         free(left_recv_buf);
     }
     if (neighbors->right != MPI_PROC_NULL)
     {
-        set_col(view->grid, left_recv_buf, view->width + 1, 1, view->height);
+        set_col(&view->grid, left_recv_buf, view->width + 1, 1, view->height);
         free(right_recv_buf);
     }
 
