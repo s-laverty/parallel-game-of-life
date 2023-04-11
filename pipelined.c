@@ -16,6 +16,8 @@
 
 //TODO: what if HEIGHT is not divisible by ROWS_PER_GPU?
 //TODO: what if TIMESTEPS != # MPI ranks? should wrap around...
+//TODO: test wrapping with live cells near edges
+//TODO: test performance vs only GPU calls
 
 // these have to match the WIDTH & HEIGHT in cuda-kernels.cu
 #define WIDTH 20
@@ -89,32 +91,41 @@ int main(int argc, char** argv){
 	MPI_Status* status;
 	MPI_Request* req;
 	for(int t = 0; t < (TIMESTEPS-1)*2 + HEIGHT/ROWS_PER_GPU; t++){
-		if(my_rank > 0 && t > 2*(my_rank-1) && my_t < HEIGHT/ROWS_PER_GPU-1){
-			int row_start = ROWS_PER_GPU*((t- 2*(my_rank-1))-1) + my_rank-1;
-			printf("Rank %d receives data from %d starting at %d at t=%d\n", my_rank, my_rank - 1, row_start, t);
-			MPI_Recv(grid+row_start, WIDTH*ROWS_PER_GPU, MPI_C_BOOL, my_rank-1, 0, MPI_COMM_WORLD, status);
-		}
-
-
 		if(t >= 2*my_rank && my_t < HEIGHT/ROWS_PER_GPU){
 			row_start = my_t*ROWS_PER_GPU+my_rank;
 			printf("Rank %d processes rows %d to %d at t=%d\n", my_rank, row_start, row_start+ROWS_PER_GPU-1, t);
 			run_kernel_section(grid, next_grid, WIDTH, HEIGHT, row_start, row_start+ROWS_PER_GPU-1);
-
 			//transfer data to the next rank
 			if (my_rank+1 < num_ranks){
 				printf("Rank %d sends data to %d starting at %d at t=%d\n", my_rank, my_rank+1, row_start, t);
-				MPI_Send(next_grid+row_start, WIDTH*ROWS_PER_GPU, MPI_C_BOOL, my_rank+1, 0, MPI_COMM_WORLD);
+				if (row_start+ROWS_PER_GPU-1 >= HEIGHT){ //rows wrap around so must send in 2 chunks
+					MPI_Send(next_grid+WIDTH*row_start, WIDTH*(HEIGHT-row_start), MPI_C_BOOL, my_rank+1, 0, MPI_COMM_WORLD);
+					MPI_Send(next_grid, WIDTH*(ROWS_PER_GPU-(HEIGHT-row_start)), MPI_C_BOOL, my_rank+1, 0, MPI_COMM_WORLD);
+				}
+				else{ // don't have to wrap around
+					MPI_Send(next_grid+WIDTH*row_start, WIDTH*ROWS_PER_GPU, MPI_C_BOOL, my_rank+1, 0, MPI_COMM_WORLD);
+				}
 			}
-
 			my_t++;
+		}
+
+		if(my_rank > 0 && t >= 2*(my_rank-1) && my_t < HEIGHT/ROWS_PER_GPU-1){
+			int row_start = ROWS_PER_GPU*(t- 2*(my_rank-1)) + my_rank-1;
+			if (row_start+ROWS_PER_GPU-1 >= HEIGHT){ //rows wrap around so it was sent in 2 chunks
+				MPI_Recv(next_grid+WIDTH*row_start, WIDTH*(HEIGHT-row_start), MPI_C_BOOL, my_rank-1, 0, MPI_COMM_WORLD, status);
+				MPI_Recv(next_grid, WIDTH*(ROWS_PER_GPU-(HEIGHT-row_start)), MPI_C_BOOL, my_rank-1, 0, MPI_COMM_WORLD, status);
+			}
+			else{ // don't have to wrap around
+				MPI_Recv(grid+WIDTH*row_start, WIDTH*ROWS_PER_GPU, MPI_C_BOOL, my_rank-1, 0, MPI_COMM_WORLD, status);
+			}
+			printf("Rank %d receives data from %d starting at %d at t=%d\n", my_rank, my_rank - 1, row_start, t);
 		}
 		//MPI_Barrier(MPI_COMM_WORLD);
 	}
 	end_cycles = clock_now();
 	printf("Rank %d finished in %lf\n",  my_rank, ((double)(end_cycles-start_cycles))/clock_frequency);
 
-	
+	MPI_Barrier(MPI_COMM_WORLD);
 	// Print output
 	if (my_rank == 3){
 		printf("\nRank %d output\n", my_rank);

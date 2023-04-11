@@ -91,7 +91,7 @@ __global__ void compute_timestep_section(bool* grid, bool* next_grid, int width,
 	if (i < width*section_height){
 		unsigned int col = i % width;
 		unsigned int row = i / width + start_row;
-		row = (row < height-1) ? row : row-height;
+		row = (row < height) ? row : row-height;
 		// calculate wrapped-around values
 		unsigned int col_plus1 = (col < width-1) ? col+1 : 0;
 		unsigned int col_minus1 = (col > 0) ? col-1 : width-1;
