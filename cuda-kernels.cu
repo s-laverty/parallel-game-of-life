@@ -15,8 +15,8 @@
 
 #define clock_frequency 512000000
 #define threads_per_block 32
-#define WIDTH 16
-#define HEIGHT 6
+#define WIDTH 20
+#define HEIGHT 20
 
 
 // this board template is just for convenient storage of 
@@ -35,7 +35,7 @@ bool board_template[10][10] = {
 };
 
 /**
- * @brief Compute 1 time step for a given section of the grid.
+ * @brief Compute 1 time step for the ENTIRE grid input.
  * Each thread computes 1 cell.
  *
  * @param grid Current state of grid section (input)
@@ -72,14 +72,87 @@ __global__ void compute_timestep(bool* grid, bool* next_grid, int width, int hei
 	  }
 }
 
-extern "C" void run_kernel(bool* grid, bool* next_grid){
-	unsigned int grid_size = ceil((HEIGHT*WIDTH) / (float)threads_per_block);
-	compute_timestep<<<grid_size, threads_per_block>>>(grid, next_grid, WIDTH, HEIGHT);
+
+/**
+ * @brief Compute 1 time step for ONE SECTION OF the grid.
+ * Will properly compute the output from start_row to end_row.
+ *
+ * @param grid Current state of grid section (input)
+ * @param next_grid Next time step state of grid section (output)
+ * @param width Grid width
+ * @param height Grid height
+ * @param start_row Index of row to start at
+ * @param end_row Index of row to end at (inclusive), will wrap if end_row > height
+ */
+__global__ void compute_timestep_section(bool* grid, bool* next_grid, int width, int height, int start_row, int end_row){
+	// Each thread the next state for 1 cell
+	unsigned int i = blockIdx.x*blockDim.x + threadIdx.x; 
+	unsigned int section_height = end_row-start_row+1;
+	if (i < width*section_height){
+		unsigned int col = i % width;
+		unsigned int row = i / width + start_row;
+		row = (row < height-1) ? row : row-height;
+		// calculate wrapped-around values
+		unsigned int col_plus1 = (col < width-1) ? col+1 : 0;
+		unsigned int col_minus1 = (col > 0) ? col-1 : width-1;
+		unsigned int row_plus1 = (row < height-1) ? row+1 : 0;
+		unsigned int row_minus1 = (row > 0) ? row-1 : height-1;
+
+		// count the num of alive cells surrounding 
+		unsigned int surrounding_population = 
+			grid[width*row_minus1 + col_minus1] + 
+		  	grid[width*row_minus1 + col] + 
+		  	grid[width*row_minus1 + col_plus1] + 
+		  	grid[width*row + col_minus1] + 
+		  	grid[width*row + col_plus1] + 
+		   	grid[width*row_plus1 + col_minus1] + 
+		  	grid[width*row_plus1 + col] + 
+		  	grid[width*row_plus1 + col_plus1];
+			
+		// Set next cell state
+		bool next_cell_state = (surrounding_population == 3 || (grid[width*row + col] && surrounding_population==2));
+		next_grid[width*row + col] = next_cell_state;	
+	  }
+}
+
+/**
+ * @brief Function to call CUDA kernel for entire grid
+ *
+ * @param grid Pointer to start of the current grid
+ * @param next_grid Pointer to start of the next timestep grid
+ * @param width Width of entire grid
+ * @param height Height of entire grid
+ */
+extern "C" void run_kernel(bool* grid, bool* next_grid, int width, int height){
+	unsigned int grid_size = ceil((width*height) / (float)threads_per_block);
+	compute_timestep<<<grid_size, threads_per_block>>>(grid, next_grid, width, height);
+	cudaDeviceSynchronize();
+}
+
+/**
+ * @brief Function to CUDA kernel for a section of the grid
+ *
+ * @param grid Pointer to start of the current grid
+ * @param next_grid Pointer to start of the next timestep grid
+ * @param width Width of entire grid
+ * @param height Height of entire grid
+ * @param start_row Row index to start at (inclusive)
+ * @param end_row Row index to end at (inclusive)
+ */
+extern "C" void run_kernel_section(bool* grid, bool* next_grid, int width, int height, int start_row, int end_row){
+	unsigned int grid_size = ceil((width*(end_row-start_row+1)) / (float)threads_per_block);
+	compute_timestep_section<<<grid_size, threads_per_block>>>(grid, next_grid, width, height, start_row, end_row);
 	cudaDeviceSynchronize();
 }
 
 
-//initialize memory 
+/*
+ * @brief Function to initialize CUDA memory
+ *
+ * @param grid Current grid
+ * @param next_grid Next timestep grid
+ * @param my_rank Rank of MPI process
+ */
 extern "C" void cuda_init(bool* grid, bool* next_grid, int my_rank){
   // set a CUDA device for each rank with minimal overlap in device usage
   int cudaDeviceCount;
@@ -101,8 +174,12 @@ extern "C" void cuda_init(bool* grid, bool* next_grid, int my_rank){
   cudaMallocManaged(&next_grid, WIDTH*HEIGHT*sizeof(bool));
 }
 
-//free memory as necessary
-extern "C" void free_cudamemory(bool* grid, bool* next_grid){
+/*
+ * @brief Function to free CUDA memory
+ *
+ * @param grid Current grid
+ * @param next_grid Next timestep grid
+ */extern "C" void free_cudamemory(bool* grid, bool* next_grid){
   cudaFree(grid);
   cudaFree(next_grid);
 }

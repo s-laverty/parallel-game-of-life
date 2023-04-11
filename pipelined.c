@@ -3,7 +3,7 @@
  * @author Allison Harry (harrya@rpi.edu)
  * @brief This file implements a "pipelined" implementation of the game of life
  * where each GPU computes 1 generation and they are pipelined to overlap in time.
- * Can compare performance with other implementations in the report
+ * Should compare performance with other implementations in the report
  * @version 1.0
  * @date 2023-04-10
  */
@@ -14,12 +14,19 @@
 
 #include "clockcycle.h"
 
+//TODO: what if HEIGHT is not divisible by ROWS_PER_GPU?
+//TODO: what if TIMESTEPS != # MPI ranks? should wrap around...
+
 // these have to match the WIDTH & HEIGHT in cuda-kernels.cu
-#define WIDTH 16
-#define HEIGHT 6
+#define WIDTH 20
+#define HEIGHT 20
+#define TIMESTEPS 4 // number of generations to calculate
+#define ROWS_PER_GPU 5 //number of rows computed by each GPU every time step
+#define clock_frequency 512000000
 
 void cuda_init(bool* grid, bool* next_grid, int my_rank);
-void run_kernel(bool* grid, bool* next_grid);
+void run_kernel(bool* grid, bool* next_grid, int width, int height);
+void run_kernel_section(bool* grid, bool* next_grid, int width, int height, int start_row, int end_row);
 void free_cudamemory(bool* grid, bool* next_grid);
 
 // this board template is just for convenient storage of 
@@ -70,17 +77,55 @@ int main(int argc, char** argv){
 		}
 		if(my_rank == 0) printf("\n");
 	}
+	MPI_Barrier(MPI_COMM_WORLD);
 
-	run_kernel(grid, next_grid);
+	unsigned long long start_cycles=clock_now(); // dummy clock reads to init
+  	unsigned long long end_cycles=clock_now();   // dummy clock reads to init
+	start_cycles = clock_now();
 
-	// Print output
-	printf("\nRank %d output\n", my_rank);
-	for(int r = 0; r < HEIGHT; r++){
-		for(int c = 0; c < WIDTH; c++){
-			printf("%d ", next_grid[r*WIDTH + c]);
+	// Synchronize between each time step
+	int my_t = 0; // time step for this rank
+	int row_start = 0;
+	MPI_Status* status;
+	MPI_Request* req;
+	for(int t = 0; t < (TIMESTEPS-1)*2 + HEIGHT/ROWS_PER_GPU; t++){
+		if(my_rank > 0 && t > 2*(my_rank-1) && my_t < HEIGHT/ROWS_PER_GPU-1){
+			int row_start = ROWS_PER_GPU*((t- 2*(my_rank-1))-1) + my_rank-1;
+			printf("Rank %d receives data from %d starting at %d at t=%d\n", my_rank, my_rank - 1, row_start, t);
+			MPI_Recv(grid+row_start, WIDTH*ROWS_PER_GPU, MPI_C_BOOL, my_rank-1, 0, MPI_COMM_WORLD, status);
 		}
-		printf("\n");
+
+
+		if(t >= 2*my_rank && my_t < HEIGHT/ROWS_PER_GPU){
+			row_start = my_t*ROWS_PER_GPU+my_rank;
+			printf("Rank %d processes rows %d to %d at t=%d\n", my_rank, row_start, row_start+ROWS_PER_GPU-1, t);
+			run_kernel_section(grid, next_grid, WIDTH, HEIGHT, row_start, row_start+ROWS_PER_GPU-1);
+
+			//transfer data to the next rank
+			if (my_rank+1 < num_ranks){
+				printf("Rank %d sends data to %d starting at %d at t=%d\n", my_rank, my_rank+1, row_start, t);
+				MPI_Send(next_grid+row_start, WIDTH*ROWS_PER_GPU, MPI_C_BOOL, my_rank+1, 0, MPI_COMM_WORLD);
+			}
+
+			my_t++;
+		}
+		//MPI_Barrier(MPI_COMM_WORLD);
 	}
+	end_cycles = clock_now();
+	printf("Rank %d finished in %lf\n",  my_rank, ((double)(end_cycles-start_cycles))/clock_frequency);
+
+	
+	// Print output
+	if (my_rank == 3){
+		printf("\nRank %d output\n", my_rank);
+		for(int r = 0; r < HEIGHT; r++){
+			for(int c = 0; c < WIDTH; c++){
+				printf("%d ", next_grid[r*WIDTH + c]);
+			}
+			printf("\n");
+		}	
+	}
+
 
 	free_cudamemory(grid, next_grid);
 
