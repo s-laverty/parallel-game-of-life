@@ -19,6 +19,8 @@
 /** Border cell exchange tags. Relative position of receiver. */
 #define BORDER_CELL_EXCHANGE_TAG 0
 
+#define MPI_CELL_Datatype MPI_C_BOOL
+
 /** The communicator and ranks of neighboring grid views using a horizontal striped layout. */
 typedef struct
 {
@@ -60,7 +62,7 @@ typedef struct
  * @param view A view of the global data grid.
  * @param neighbors All neighboring views.
  */
-void exchange_border_cells_striped(const GridView *view, const GridViewNeighborsStriped *neighbors)
+void exchange_border_cells_striped(GridView const *view, GridViewNeighborsStriped const *neighbors)
 {
     // Define MPI send/recv requests.
     MPI_Request recv_requests[2];
@@ -69,14 +71,14 @@ void exchange_border_cells_striped(const GridView *view, const GridViewNeighbors
     // Make receive requests.
     MPI_Irecv(row_ptr(&view->grid, 0) + 1,
               view->width,
-              MPI_C_BOOL,
+              MPI_CELL_Datatype,
               neighbors->above,
               BORDER_CELL_EXCHANGE_TAG,
               neighbors->comm,
               recv_requests + 0);
     MPI_Irecv(row_ptr(&view->grid, view->height + 1) + 1,
               view->width,
-              MPI_C_BOOL,
+              MPI_CELL_Datatype,
               neighbors->below,
               BORDER_CELL_EXCHANGE_TAG,
               neighbors->comm,
@@ -85,14 +87,14 @@ void exchange_border_cells_striped(const GridView *view, const GridViewNeighbors
     // Make send requests.
     MPI_Isend(row_ptr(&view->grid, 1) + 1,
               view->width,
-              MPI_C_BOOL,
+              MPI_CELL_Datatype,
               neighbors->above,
               BORDER_CELL_EXCHANGE_TAG,
               neighbors->comm,
               send_requests + 0);
     MPI_Isend(row_ptr(&view->grid, view->height) + 1,
               view->width,
-              MPI_C_BOOL,
+              MPI_CELL_Datatype,
               neighbors->below,
               BORDER_CELL_EXCHANGE_TAG,
               neighbors->comm,
@@ -101,7 +103,7 @@ void exchange_border_cells_striped(const GridView *view, const GridViewNeighbors
 #if WRAP_GLOBAL_GRID
     {
         // Copy left-right borders to padding.
-        bool *row = row_ptr(&view->grid, 1);
+        Cell_t *row = row_ptr(&view->grid, 1);
         for (size_t i = 0; i < view->height; i++, row += view->grid.width)
         {
             row[0] = row[view->width];
@@ -116,7 +118,7 @@ void exchange_border_cells_striped(const GridView *view, const GridViewNeighbors
 #if WRAP_GLOBAL_GRID
     {
         // Copy padding to corners.
-        bool *row = row_ptr(&view->grid, 0);
+        Cell_t *row = row_ptr(&view->grid, 0);
         row[0] = row[view->width];
         row[view->width + 1] = row[1];
         row = row_ptr(&view->grid, view->height + 1);
@@ -136,67 +138,67 @@ void exchange_border_cells_striped(const GridView *view, const GridViewNeighbors
  * @param view A view of the global data grid.
  * @param neighbors All neighboring views.
  */
-void exchange_border_cells_brick(const GridView *view, const GridViewNeighborsBrick *neighbors)
+void exchange_border_cells_brick(GridView const *view, GridViewNeighborsBrick const *neighbors)
 {
     // Define send/recv buffers and MPI send/recv requests.
-    bool *left_recv_buf = NULL, *left_send_buf = NULL;
-    bool *right_recv_buf = NULL, *right_send_buf = NULL;
+    Cell_t *left_recv_buf = NULL, *left_send_buf = NULL;
+    Cell_t *right_recv_buf = NULL, *right_send_buf = NULL;
     MPI_Request recv_requests[6];
     MPI_Request send_requests[6];
 
     // Allocate and initialize send/recv buffers.
     if (neighbors->left != MPI_PROC_NULL)
     {
-        left_recv_buf = (bool *)malloc(view->height * sizeof(bool));
-        left_send_buf = (bool *)malloc(view->height * sizeof(bool));
+        left_recv_buf = (Cell_t *)malloc(view->height * sizeof(Cell_t));
+        left_send_buf = (Cell_t *)malloc(view->height * sizeof(Cell_t));
         get_col(left_send_buf, &view->grid, 1, 1, view->height);
     }
     if (neighbors->right != MPI_PROC_NULL)
     {
-        right_recv_buf = (bool *)malloc(view->height * sizeof(bool));
-        right_send_buf = (bool *)malloc(view->height * sizeof(bool));
+        right_recv_buf = (Cell_t *)malloc(view->height * sizeof(Cell_t));
+        right_send_buf = (Cell_t *)malloc(view->height * sizeof(Cell_t));
         get_col(right_send_buf, &view->grid, view->width, 1, view->height);
     }
 
     // Make receive requests.
     MPI_Irecv(row_ptr(&view->grid, 0),
               neighbors->above_align + 1,
-              MPI_C_BOOL,
+              MPI_CELL_Datatype,
               neighbors->above_left,
               BORDER_CELL_EXCHANGE_TAG,
               neighbors->comm,
               recv_requests + 0);
     MPI_Irecv(row_ptr(&view->grid, 0) + neighbors->above_align + 1,
               view->width + 1 - neighbors->above_align,
-              MPI_C_BOOL,
+              MPI_CELL_Datatype,
               neighbors->above_right,
               BORDER_CELL_EXCHANGE_TAG,
               neighbors->comm,
               recv_requests + 1);
     MPI_Irecv(left_recv_buf,
               view->height,
-              MPI_C_BOOL,
+              MPI_CELL_Datatype,
               neighbors->left,
               BORDER_CELL_EXCHANGE_TAG,
               neighbors->comm,
               recv_requests + 2);
     MPI_Irecv(right_recv_buf,
               view->height,
-              MPI_C_BOOL,
+              MPI_CELL_Datatype,
               neighbors->right,
               BORDER_CELL_EXCHANGE_TAG,
               neighbors->comm,
               recv_requests + 3);
     MPI_Irecv(row_ptr(&view->grid, view->height + 1),
               neighbors->below_align + 1,
-              MPI_C_BOOL,
+              MPI_CELL_Datatype,
               neighbors->below_left,
               BORDER_CELL_EXCHANGE_TAG,
               neighbors->comm,
               recv_requests + 4);
     MPI_Irecv(row_ptr(&view->grid, view->height + 1) + neighbors->below_align + 1,
               view->width + 1 - neighbors->below_align,
-              MPI_C_BOOL,
+              MPI_CELL_Datatype,
               neighbors->below_right,
               BORDER_CELL_EXCHANGE_TAG,
               neighbors->comm,
@@ -205,42 +207,42 @@ void exchange_border_cells_brick(const GridView *view, const GridViewNeighborsBr
     // Make send requests.
     MPI_Isend(row_ptr(&view->grid, 1) + 1,
               neighbors->above_align + 1,
-              MPI_C_BOOL,
+              MPI_CELL_Datatype,
               neighbors->above_left,
               BORDER_CELL_EXCHANGE_TAG,
               neighbors->comm,
               send_requests + 0);
     MPI_Isend(row_ptr(&view->grid, 1) + neighbors->above_align,
               view->width + 1 - neighbors->above_align,
-              MPI_C_BOOL,
+              MPI_CELL_Datatype,
               neighbors->above_right,
               BORDER_CELL_EXCHANGE_TAG,
               neighbors->comm,
               send_requests + 1);
     MPI_Isend(left_send_buf,
               view->height,
-              MPI_C_BOOL,
+              MPI_CELL_Datatype,
               neighbors->left,
               BORDER_CELL_EXCHANGE_TAG,
               neighbors->comm,
               send_requests + 2);
     MPI_Isend(right_send_buf,
               view->height,
-              MPI_C_BOOL,
+              MPI_CELL_Datatype,
               neighbors->right,
               BORDER_CELL_EXCHANGE_TAG,
               neighbors->comm,
               send_requests + 3);
     MPI_Isend(row_ptr(&view->grid, view->height) + 1,
               neighbors->below_align + 1,
-              MPI_C_BOOL,
+              MPI_CELL_Datatype,
               neighbors->below_left,
               BORDER_CELL_EXCHANGE_TAG,
               neighbors->comm,
               send_requests + 4);
     MPI_Isend(row_ptr(&view->grid, view->height) + neighbors->below_align,
               view->width + 1 - neighbors->below_align,
-              MPI_C_BOOL,
+              MPI_CELL_Datatype,
               neighbors->below_right,
               BORDER_CELL_EXCHANGE_TAG,
               neighbors->comm,
@@ -280,7 +282,7 @@ static void _alloc_grid_view(GridView *view)
 {
     view->grid.width = view->width + 2;
     view->grid.height = view->height + 2;
-    view->grid.data = (bool *)calloc(view->grid.width * view->grid.height, sizeof(bool));
+    view->grid.data = (Cell_t *)calloc(view->grid.width * view->grid.height, sizeof(Cell_t));
 }
 
 /**
@@ -453,9 +455,9 @@ bool get_view_brick(GridView *view,
                                     ? neighbors->above_left - 1
                                     : MPI_PROC_NULL;
         neighbors->below_left = (neighbors->below_left != MPI_PROC_NULL &&
-                                  neighbors->right != MPI_PROC_NULL)
-                                     ? neighbors->below_left - 1
-                                     : MPI_PROC_NULL;
+                                 neighbors->right != MPI_PROC_NULL)
+                                    ? neighbors->below_left - 1
+                                    : MPI_PROC_NULL;
     }
     else
     {
@@ -475,7 +477,56 @@ bool get_view_brick(GridView *view,
 
 int main(int argc, char const *argv[])
 {
+    /** Fragmentation strategies. */
+    static enum strategy { FRAG_STRATEGY_STRIPED,
+                           FRAG_STRATEGY_BRICK,
+                           FRAG_STRATEGY_ERR };
+    static char const *strategies[] = {[FRAG_STRATEGY_STRIPED] = "striped",
+                                       [FRAG_STRATEGY_BRICK] = "brick"};
+    static char const *arg_parse_err = "Usage: %s [-l checkpoint] strategy\n";
+
     MPI_Init(&argc, &argv);
+
+    // Parse input args
+    char const *load_checkpoint = NULL;
+    int opt;
+    while ((opt = getopt(argc, argv, "l")) != -1)
+    {
+        switch (opt)
+        {
+        case 'l':
+            load_checkpoint = optarg;
+            break;
+        default:
+            fprintf(stderr, arg_parse_err, argv[0]);
+            return EXIT_FAILURE;
+        }
+    }
+    if (argc - optind < 1)
+    {
+        fprintf(stderr, arg_parse_err, argv[0]);
+        return EXIT_FAILURE;
+    }
+    enum strategy strategy = 0;
+    while (strcmp(argv[optind], strategies[strategy]))
+        if (++strategy == FRAG_STRATEGY_ERR)
+        {
+            fprintf(stderr,
+                    "Fragmentation strategy \"%s\" invalid. Must be one of:\n",
+                    argv[optind]);
+            for (strategy = 0; strategy < FRAG_STRATEGY_ERR; strategy++)
+                fprintf(stderr, "  %s\n", strategies[strategy]);
+            return EXIT_FAILURE;
+        }
+
+    // Run simulation
+    switch (strategy)
+    {
+    case FRAG_STRATEGY_STRIPED:
+        break;
+    case FRAG_STRATEGY_BRICK:
+        break;
+    }
 
     MPI_Finalize();
 

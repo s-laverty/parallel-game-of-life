@@ -16,11 +16,13 @@
 #define NUM_COLS 32768 // 2^15
 #define WRAP_GLOBAL_GRID true
 
+typedef bool Cell_t;
+
 /** A grid of binary cell data. */
 typedef struct
 {
     /** Game of life cell data. Flattened array of rows. */
-    bool *data;
+    Cell_t *data;
     /** Number of rows. */
     size_t height;
     /** Number of columns. */
@@ -32,9 +34,9 @@ typedef struct
  * 
  * @param grid The grid.
  * @param row_idx The index of the row.
- * @return bool *
+ * @return Cell_t *
  */
-inline bool *row_ptr(const Grid *grid, size_t row_idx)
+inline Cell_t *row_ptr(Grid const *grid, size_t row_idx)
 {
     return grid->data + (row_idx * grid->width);
 }
@@ -48,9 +50,9 @@ inline bool *row_ptr(const Grid *grid, size_t row_idx)
  * @param col_start The column index to start copying from.
  * @param length How many cells to copy.
  */
-inline void get_row(bool *dest, const Grid *src, size_t row_idx, size_t col_start, size_t length)
+inline void get_row(Cell_t *dest, Grid const *src, size_t row_idx, size_t col_start, size_t length)
 {
-    memcpy(dest, row_ptr(src, row_idx) + col_start, length * sizeof(bool));
+    memcpy(dest, row_ptr(src, row_idx) + col_start, length * sizeof(Cell_t));
 }
 
 /**
@@ -62,9 +64,9 @@ inline void get_row(bool *dest, const Grid *src, size_t row_idx, size_t col_star
  * @param col_start The column index to start copying to.
  * @param length How many cells to copy.
  */
-inline void set_row(Grid *dest, const bool *src, size_t row_idx, size_t col_start, size_t length)
+inline void set_row(Grid *dest, Cell_t const *src, size_t row_idx, size_t col_start, size_t length)
 {
-    memcpy(row_ptr(dest, row_idx) + col_start, src, length * sizeof(bool));
+    memcpy(row_ptr(dest, row_idx) + col_start, src, length * sizeof(Cell_t));
 }
 
 /**
@@ -76,7 +78,7 @@ inline void set_row(Grid *dest, const bool *src, size_t row_idx, size_t col_star
  * @param row_start The row index to start copying from.
  * @param length How many cells to copy.
  */
-inline void get_col(bool *dest, const Grid *src, size_t col_idx, size_t row_start, size_t length)
+inline void get_col(Cell_t *dest, Grid const *src, size_t col_idx, size_t row_start, size_t length)
 {
     for (size_t i = 0; i < length; i++)
         dest[i] = row_ptr(src, row_start + i)[col_idx];
@@ -91,7 +93,7 @@ inline void get_col(bool *dest, const Grid *src, size_t col_idx, size_t row_star
  * @param row_start The row index to start copying to.
  * @param length How many cells to copy.
  */
-inline void set_col(Grid *dest, const bool *src, size_t col_idx, size_t row_start, size_t length)
+inline void set_col(Grid *dest, const Cell_t *src, size_t col_idx, size_t row_start, size_t length)
 {
     for (size_t i = 0; i < length; i++)
         row_ptr(dest, row_start + i)[col_idx] = src[i];
