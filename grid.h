@@ -6,6 +6,9 @@
  * @date 2023-04-09
  */
 
+#ifndef _GRID_H
+#define _GRID_H
+
 #include <stdbool.h>
 #include <string.h>
 
@@ -18,10 +21,10 @@ typedef struct
 {
     /** Game of life cell data. Flattened array of rows. */
     bool *data;
-    /** Number of columns. */
-    size_t width;
     /** Number of rows. */
     size_t height;
+    /** Number of columns. */
+    size_t width;
 } Grid;
 
 /**
@@ -101,10 +104,12 @@ typedef struct
     Grid grid;
     /** Starting global row index of the grid view. */
     size_t row_start;
-    /** Number of rows in the grid view (NOT including 1-cell padding). */
-    size_t width;
     /** Starting global column index of the grid view. */
     size_t col_start;
-    /** Number of columns in the grid view (NOT including 1-cell padding). */
+    /** Number of rows in the grid view (NOT including 1-cell padding). */
     size_t height;
+    /** Number of columns in the grid view (NOT including 1-cell padding). */
+    size_t width;
 } GridView;
+
+#endif
