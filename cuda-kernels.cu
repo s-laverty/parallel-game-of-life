@@ -254,7 +254,7 @@ extern "C" void run_kernel_section(bool* grid, bool* next_grid, int width, int h
  * @param next_grid Next timestep grid
  * @param my_rank Rank of MPI process
  */
-extern "C" void cuda_init(bool* grid, bool* next_grid, int my_rank){
+extern "C" void cuda_init(bool** grid, bool** next_grid, int my_rank){
   // set a CUDA device for each rank with minimal overlap in device usage
   int cudaDeviceCount;
   cudaError_t cE;
@@ -269,8 +269,8 @@ extern "C" void cuda_init(bool* grid, bool* next_grid, int my_rank){
   }
 
   //memory allocation/initialization
-  cudaMallocManaged(&grid, WIDTH*HEIGHT*sizeof(bool));
-  cudaMallocManaged(&next_grid, WIDTH*HEIGHT*sizeof(bool));
+  cudaMallocManaged(grid, WIDTH*HEIGHT*sizeof(bool));
+  cudaMallocManaged(next_grid, WIDTH*HEIGHT*sizeof(bool));
 }
 
 /*

@@ -26,7 +26,7 @@
 #define ROWS_PER_GPU 5 //number of rows computed by each GPU every time step
 #define clock_frequency 512000000
 
-void cuda_init(bool* grid, bool* next_grid, int my_rank);
+void cuda_init(bool** grid, bool** next_grid, int my_rank);
 void run_kernel(bool* grid, bool* next_grid, int width, int height);
 void run_kernel_section(bool* grid, bool* next_grid, int width, int height, int start_row, int end_row);
 void free_cudamemory(bool* grid, bool* next_grid);
@@ -61,9 +61,9 @@ int main(int argc, char** argv){
 	//can make sure the setup is correct
 
 	// Allocate memory
-	bool* grid = (bool*)malloc(WIDTH*HEIGHT*sizeof(bool)); //current time step grid
-	bool* next_grid = (bool*)malloc(WIDTH*HEIGHT*sizeof(bool)); //next time step grid
-	cuda_init(grid, next_grid, my_rank);
+	bool* grid; //current time step grid
+	bool* next_grid; //next time step grid
+	cuda_init(&grid, &next_grid, my_rank);
 
 	// Initialize & print test memory
 	if(my_rank == 0) printf("INPUT:\n");
@@ -130,8 +130,8 @@ int main(int argc, char** argv){
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	// Print output
-	if (my_rank == 3){
-		printf("\nRank %d output\n", my_rank);
+	if (my_rank == 1){
+		printf("\nRank %d output (%d generations have passed)\n", my_rank, my_rank+1);
 		for(int r = 0; r < HEIGHT; r++){
 			for(int c = 0; c < WIDTH; c++){
 				printf("%d ", next_grid[r*WIDTH + c]);
