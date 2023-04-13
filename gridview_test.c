@@ -29,14 +29,10 @@ int main(int argc, char** argv){
 	grid.height = 8;
 
 	Grid curr;
-	bool* grid_data = (bool*) malloc(100*sizeof(bool));
-	curr.data = grid_data;
 	curr.width = 10;
 	curr.height = 10;
 
 	Grid next;
-	bool* next_grid_data = (bool*) malloc(100*sizeof(bool));
-	next.data = next_grid_data;
 	next.width = 10;
 	next.height = 10;
 
@@ -45,16 +41,18 @@ int main(int argc, char** argv){
 
 	cuda_init_gridview(&grid, 0); //CUDA initialize
 
+
 	// fill initial values
 	for(int r = 0; r < 10; r++){
 		for(int c = 0; c < 10; c++){
-			grid_data[r*10 + c] = grid_template[r][c];
-			next_grid_data[r*10 + c] = grid_template[r][c];
+			grid.grid.data[r*10 + c] = grid_template[r][c];
+			grid.next_grid.data[r*10 + c] = grid_template[r][c];
 			
-			printf("%d ", grid_data[r*10 + c]);
+			printf("%d ", grid.grid.data[r*10 + c]);
 		}
 		printf("\n");
 	}
+
 
 	// call kernel
 	run_kernel_nowrap(&grid);

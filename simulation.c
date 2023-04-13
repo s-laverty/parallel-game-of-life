@@ -27,7 +27,7 @@ extern void free_cudamem_gridview(GridView *grid);
 
 #else
 
-#define MPI_CELL_Datatype MPI_C_BOOL
+#define MPI_CELL_Datatype MPI_C_CHAR
 
 #endif
 
@@ -599,16 +599,6 @@ int main(int argc, char *argv[])
                 strategies[strategy]);
         return EXIT_FAILURE;
     }
-    //have to allocate memory on the host first
-    view.grid.data =  (bool*) malloc(100*sizeof(bool));
-    view.grid.height = 10;
-    view.grid.width = 10;
-    view.next_grid.data =  (bool*) malloc(100*sizeof(bool));
-    view.next_grid.height = 10;
-    view.next_grid.width = 10;
-    view.width = 9;
-    view.height = 9;
-    //now we can CUDA allocate
     cuda_init_gridview(&view, world_rank);
 
 #ifndef DEBUG

@@ -48,29 +48,29 @@ bool board_template[10][10] = {
  *
  * @param grid GridView struct
  */
-__global__ void compute_timestep_nowrap(GridView* grid){
+__global__ void compute_timestep_nowrap(GridView grid){
 	// Each thread the next state for 1 cell
 	unsigned int i = blockIdx.x*blockDim.x + threadIdx.x; 
 
-	if (i < grid->width*grid->height){
-		unsigned int padded_width = grid->width + 2; // actual width including padding
-		unsigned int col = i % grid->width + 1; // add 1 for padding
-		unsigned int row = i / grid->width + 1; // add 1 for padding
+	if (i < grid.width*grid.height){
+		unsigned int padded_width = grid.width + 2; // actual width including padding
+		unsigned int col = i % grid.width + 1; // add 1 for padding
+		unsigned int row = i / grid.width + 1; // add 1 for padding
 
 		// count the num of alive cells surrounding 
 		unsigned int surrounding_population = 
-			grid->grid.data[padded_width*(row-1) + col-1] + 
-		  	grid->grid.data[padded_width*(row-1) + col] + 
-		  	grid->grid.data[padded_width*(row-1) + col+1] + 
-		  	grid->grid.data[padded_width*row + col-1] + 
-		  	grid->grid.data[padded_width*row + col+1] + 
-		   	grid->grid.data[padded_width*(row+1) + col-1] + 
-		  	grid->grid.data[padded_width*(row+1) + col] + 
-		  	grid->grid.data[padded_width*(row+1) + col+1];
+			grid.grid.data[padded_width*(row-1) + col-1] + 
+		  	grid.grid.data[padded_width*(row-1) + col] + 
+		  	grid.grid.data[padded_width*(row-1) + col+1] + 
+		  	grid.grid.data[padded_width*row + col-1] + 
+		  	grid.grid.data[padded_width*row + col+1] + 
+		   	grid.grid.data[padded_width*(row+1) + col-1] + 
+		  	grid.grid.data[padded_width*(row+1) + col] + 
+		  	grid.grid.data[padded_width*(row+1) + col+1];
 			
 		// Set next cell state
-		bool next_cell_state = (surrounding_population == 3 || (grid->grid.data[padded_width*row + col] && surrounding_population==2));
-		grid->next_grid.data[padded_width*row + col] = next_cell_state;	
+		bool next_cell_state = (surrounding_population == 3 || (grid.grid.data[padded_width*row + col] && surrounding_population==2));
+		grid.next_grid.data[padded_width*row + col] = next_cell_state;	
 	  }
 }
 
@@ -82,7 +82,7 @@ __global__ void compute_timestep_nowrap(GridView* grid){
  */
 extern "C" void run_kernel_nowrap(GridView* grid){
 	unsigned int grid_size = ceil((grid->width*grid->height) / (float)threads_per_block);
-	compute_timestep_nowrap<<<grid_size, threads_per_block>>>(grid);
+	compute_timestep_nowrap<<<grid_size, threads_per_block>>>(*grid);
 	cudaDeviceSynchronize();
 }
 
@@ -108,10 +108,11 @@ extern "C" void cuda_init_gridview(GridView* grid, int my_rank){
   }
 
   //memory allocation/initialization
-  cudaMallocManaged(&grid, sizeof(GridView));
   //Grid structs contain pointers that need to be copied explicitly
+
   cudaMallocManaged(&(grid->grid.data), grid->grid.width*grid->grid.height*sizeof(bool));
   cudaMallocManaged(&(grid->next_grid.data), grid->next_grid.width*grid->next_grid.height*sizeof(bool));
+
 }
 
 /*
@@ -122,7 +123,6 @@ extern "C" void cuda_init_gridview(GridView* grid, int my_rank){
 extern "C" void free_cudamem_gridview(GridView* grid){
 	cudaFree(grid->grid.data);
 	cudaFree(grid->next_grid.data);
-	cudaFree(grid);
 }
 
 
