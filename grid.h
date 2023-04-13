@@ -12,11 +12,23 @@
 #include <stdbool.h>
 #include <string.h>
 
+#ifndef DEBUG
+
 #define NUM_ROWS 32768 // 2^15
 #define NUM_COLS 32768 // 2^15
 #define WRAP_GLOBAL_GRID true
 
 typedef bool Cell_t;
+
+#else
+
+#define NUM_ROWS 13
+#define NUM_COLS 13
+#define WRAP_GLOBAL_GRID false
+
+typedef char Cell_t;
+
+#endif
 
 /** A grid of binary cell data. */
 typedef struct
@@ -31,7 +43,7 @@ typedef struct
 
 /**
  * @brief Get a pointer to a grid row.
- * 
+ *
  * @param grid The grid.
  * @param row_idx The index of the row.
  * @return Cell_t *

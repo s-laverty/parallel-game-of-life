@@ -16,10 +16,15 @@
 #include "clockcycle.h"
 #include "grid.h"
 
-/** Border cell exchange tags. Relative position of receiver. */
-#define BORDER_CELL_EXCHANGE_TAG 0
+#ifndef DEBUG
 
 #define MPI_CELL_Datatype MPI_C_BOOL
+
+#else
+
+#define MPI_CELL_Datatype MPI_CHAR
+
+#endif
 
 /** The communicator and ranks of neighboring grid views using a horizontal striped layout. */
 typedef struct
@@ -62,8 +67,15 @@ typedef struct
  * @param view A view of the global data grid.
  * @param neighbors All neighboring views.
  */
-void exchange_border_cells_striped(GridView const *view, GridViewNeighborsStriped const *neighbors)
+void exchange_border_cells_striped(GridView *view, GridViewNeighborsStriped const *neighbors)
 {
+    /** Border cell exchange tags */
+    enum
+    {
+        TO_ABOVE,
+        TO_BELOW
+    };
+
     // Define MPI send/recv requests.
     MPI_Request recv_requests[2];
     MPI_Request send_requests[2];
@@ -73,14 +85,14 @@ void exchange_border_cells_striped(GridView const *view, GridViewNeighborsStripe
               view->width,
               MPI_CELL_Datatype,
               neighbors->above,
-              BORDER_CELL_EXCHANGE_TAG,
+              TO_BELOW,
               neighbors->comm,
               recv_requests + 0);
     MPI_Irecv(row_ptr(&view->grid, view->height + 1) + 1,
               view->width,
               MPI_CELL_Datatype,
               neighbors->below,
-              BORDER_CELL_EXCHANGE_TAG,
+              TO_ABOVE,
               neighbors->comm,
               recv_requests + 1);
 
@@ -89,14 +101,14 @@ void exchange_border_cells_striped(GridView const *view, GridViewNeighborsStripe
               view->width,
               MPI_CELL_Datatype,
               neighbors->above,
-              BORDER_CELL_EXCHANGE_TAG,
+              TO_ABOVE,
               neighbors->comm,
               send_requests + 0);
     MPI_Isend(row_ptr(&view->grid, view->height) + 1,
               view->width,
               MPI_CELL_Datatype,
               neighbors->below,
-              BORDER_CELL_EXCHANGE_TAG,
+              TO_BELOW,
               neighbors->comm,
               send_requests + 1);
 
@@ -138,11 +150,23 @@ void exchange_border_cells_striped(GridView const *view, GridViewNeighborsStripe
  * @param view A view of the global data grid.
  * @param neighbors All neighboring views.
  */
-void exchange_border_cells_brick(GridView const *view, GridViewNeighborsBrick const *neighbors)
+void exchange_border_cells_brick(GridView *view, GridViewNeighborsBrick const *neighbors)
 {
-    // Define send/recv buffers and MPI send/recv requests.
-    Cell_t *left_recv_buf = NULL, *left_send_buf = NULL;
-    Cell_t *right_recv_buf = NULL, *right_send_buf = NULL;
+    /** Border cell exchange tags */
+    enum
+    {
+        TO_ABOVE_LEFT,
+        TO_ABOVE_RIGHT,
+        TO_LEFT,
+        TO_RIGHT,
+        TO_BELOW_LEFT,
+        TO_BELOW_RIGHT
+    };
+
+    // Define send/recv buffers and MPI send/recv requests. The buffers may be effectively unused,
+    // but they still must point to real arrays (MPI_IRecv input validation).
+    Cell_t *left_recv_buf = view->grid.data, *left_send_buf = view->grid.data;
+    Cell_t *right_recv_buf = view->grid.data, *right_send_buf = view->grid.data;
     MPI_Request recv_requests[6];
     MPI_Request send_requests[6];
 
@@ -165,42 +189,42 @@ void exchange_border_cells_brick(GridView const *view, GridViewNeighborsBrick co
               neighbors->above_align + 1,
               MPI_CELL_Datatype,
               neighbors->above_left,
-              BORDER_CELL_EXCHANGE_TAG,
+              TO_BELOW_RIGHT,
               neighbors->comm,
               recv_requests + 0);
     MPI_Irecv(row_ptr(&view->grid, 0) + neighbors->above_align + 1,
               view->width + 1 - neighbors->above_align,
               MPI_CELL_Datatype,
               neighbors->above_right,
-              BORDER_CELL_EXCHANGE_TAG,
+              TO_BELOW_LEFT,
               neighbors->comm,
               recv_requests + 1);
     MPI_Irecv(left_recv_buf,
               view->height,
               MPI_CELL_Datatype,
               neighbors->left,
-              BORDER_CELL_EXCHANGE_TAG,
+              TO_RIGHT,
               neighbors->comm,
               recv_requests + 2);
     MPI_Irecv(right_recv_buf,
               view->height,
               MPI_CELL_Datatype,
               neighbors->right,
-              BORDER_CELL_EXCHANGE_TAG,
+              TO_LEFT,
               neighbors->comm,
               recv_requests + 3);
     MPI_Irecv(row_ptr(&view->grid, view->height + 1),
               neighbors->below_align + 1,
               MPI_CELL_Datatype,
               neighbors->below_left,
-              BORDER_CELL_EXCHANGE_TAG,
+              TO_ABOVE_RIGHT,
               neighbors->comm,
               recv_requests + 4);
     MPI_Irecv(row_ptr(&view->grid, view->height + 1) + neighbors->below_align + 1,
               view->width + 1 - neighbors->below_align,
               MPI_CELL_Datatype,
               neighbors->below_right,
-              BORDER_CELL_EXCHANGE_TAG,
+              TO_ABOVE_LEFT,
               neighbors->comm,
               recv_requests + 5);
 
@@ -209,42 +233,42 @@ void exchange_border_cells_brick(GridView const *view, GridViewNeighborsBrick co
               neighbors->above_align + 1,
               MPI_CELL_Datatype,
               neighbors->above_left,
-              BORDER_CELL_EXCHANGE_TAG,
+              TO_ABOVE_LEFT,
               neighbors->comm,
               send_requests + 0);
     MPI_Isend(row_ptr(&view->grid, 1) + neighbors->above_align,
               view->width + 1 - neighbors->above_align,
               MPI_CELL_Datatype,
               neighbors->above_right,
-              BORDER_CELL_EXCHANGE_TAG,
+              TO_ABOVE_RIGHT,
               neighbors->comm,
               send_requests + 1);
     MPI_Isend(left_send_buf,
               view->height,
               MPI_CELL_Datatype,
               neighbors->left,
-              BORDER_CELL_EXCHANGE_TAG,
+              TO_LEFT,
               neighbors->comm,
               send_requests + 2);
     MPI_Isend(right_send_buf,
               view->height,
               MPI_CELL_Datatype,
               neighbors->right,
-              BORDER_CELL_EXCHANGE_TAG,
+              TO_RIGHT,
               neighbors->comm,
               send_requests + 3);
     MPI_Isend(row_ptr(&view->grid, view->height) + 1,
               neighbors->below_align + 1,
               MPI_CELL_Datatype,
               neighbors->below_left,
-              BORDER_CELL_EXCHANGE_TAG,
+              TO_BELOW_LEFT,
               neighbors->comm,
               send_requests + 4);
     MPI_Isend(row_ptr(&view->grid, view->height) + neighbors->below_align,
               view->width + 1 - neighbors->below_align,
               MPI_CELL_Datatype,
               neighbors->below_right,
-              BORDER_CELL_EXCHANGE_TAG,
+              TO_BELOW_RIGHT,
               neighbors->comm,
               send_requests + 5);
 
@@ -259,7 +283,7 @@ void exchange_border_cells_brick(GridView const *view, GridViewNeighborsBrick co
     }
     if (neighbors->right != MPI_PROC_NULL)
     {
-        set_col(&view->grid, left_recv_buf, view->width + 1, 1, view->height);
+        set_col(&view->grid, right_recv_buf, view->width + 1, 1, view->height);
         free(right_recv_buf);
     }
 
@@ -271,18 +295,6 @@ void exchange_border_cells_brick(GridView const *view, GridViewNeighborsBrick co
         free(left_send_buf);
     if (neighbors->right != MPI_PROC_NULL)
         free(right_send_buf);
-}
-
-/**
- * @brief Initialize the grid member of an otherwise-initialized GridView object.
- *
- * @param view The partially-initialized GridView object.
- */
-static void _alloc_grid_view(GridView *view)
-{
-    view->grid.width = view->width + 2;
-    view->grid.height = view->height + 2;
-    view->grid.data = (Cell_t *)calloc(view->grid.width * view->grid.height, sizeof(Cell_t));
 }
 
 /**
@@ -319,7 +331,8 @@ bool get_view_striped(GridView *view,
     view->height = height.quot + height_pad;
     view->col_start = 0;
     view->width = num_cols;
-    _alloc_grid_view(view);
+    view->grid.height = view->height + 2;
+    view->grid.width = view->width + 2;
 
     // Initialize neighbors
 #if WRAP_GLOBAL_GRID
@@ -414,10 +427,11 @@ bool get_view_brick(GridView *view,
         bool width_pad = col_idx < width.rem;
         view->col_start = col_idx * width.quot + (width_pad ? col_idx : width.rem) +
                           is_odd_row * offset; // offset every other row
-        view->width = ((col_idx + 1 < num_cols) ? width.quot : offset) + width_pad;
+        view->width = ((col_idx + 1 < num_brick_cols) ? width.quot : offset) + width_pad;
     }
 #endif
-    _alloc_grid_view(view);
+    view->grid.height = view->height + 2;
+    view->grid.width = view->width + 2;
 
     // Initialize neighbors
     neighbors->above_align = neighbors->below_align = is_odd_row ? view->width - offset : offset;
@@ -432,7 +446,7 @@ bool get_view_brick(GridView *view,
     if (is_odd_row)
     {
         neighbors->above_right += neighbors->right - world_rank;
-        neighbors->above_right += neighbors->right - world_rank;
+        neighbors->below_right += neighbors->right - world_rank;
     }
     else
     {
@@ -451,11 +465,11 @@ bool get_view_brick(GridView *view,
     if (is_odd_row)
     {
         neighbors->above_left = (neighbors->above_left != MPI_PROC_NULL &&
-                                 neighbors->right != MPI_PROC_NULL)
+                                 neighbors->left != MPI_PROC_NULL)
                                     ? neighbors->above_left - 1
                                     : MPI_PROC_NULL;
         neighbors->below_left = (neighbors->below_left != MPI_PROC_NULL &&
-                                 neighbors->right != MPI_PROC_NULL)
+                                 neighbors->left != MPI_PROC_NULL)
                                     ? neighbors->below_left - 1
                                     : MPI_PROC_NULL;
     }
@@ -472,17 +486,35 @@ bool get_view_brick(GridView *view,
     }
 #endif
 
+#ifdef DEBUG
+    fprintf(stdout, "[Rank %d] Left rank: %d\n", world_rank, neighbors->left);
+    fprintf(stdout, "[Rank %d] Right rank: %d\n", world_rank, neighbors->right);
+    fprintf(stdout, "[Rank %d] Above left rank: %d\n", world_rank, neighbors->above_left);
+    fprintf(stdout, "[Rank %d] Above right rank: %d\n", world_rank, neighbors->above_right);
+    fprintf(stdout, "[Rank %d] Below left rank: %d\n", world_rank, neighbors->below_left);
+    fprintf(stdout, "[Rank %d] Below right rank: %d\n", world_rank, neighbors->below_right);
+#endif
+
     return true;
 }
 
-int main(int argc, char const *argv[])
+int main(int argc, char *argv[])
 {
     /** Fragmentation strategies. */
-    static enum strategy { FRAG_STRATEGY_STRIPED,
-                           FRAG_STRATEGY_BRICK,
-                           FRAG_STRATEGY_ERR };
-    static char const *strategies[] = {[FRAG_STRATEGY_STRIPED] = "striped",
-                                       [FRAG_STRATEGY_BRICK] = "brick"};
+    enum strategy
+    {
+        STRAT_STRIPED,
+        STRAT_BRICK,
+        STRAT_ERR
+    };
+    static char const *strategies[] = {[STRAT_STRIPED] = "striped",
+                                       [STRAT_BRICK] = "brick"};
+    /** Union type for grid view neighbors. */
+    union neighbors
+    {
+        GridViewNeighborsStriped striped;
+        GridViewNeighborsBrick brick;
+    };
     static char const *arg_parse_err = "Usage: %s [-l checkpoint] strategy\n";
 
     MPI_Init(&argc, &argv);
@@ -509,24 +541,73 @@ int main(int argc, char const *argv[])
     }
     enum strategy strategy = 0;
     while (strcmp(argv[optind], strategies[strategy]))
-        if (++strategy == FRAG_STRATEGY_ERR)
+        if (++strategy == STRAT_ERR)
         {
             fprintf(stderr,
                     "Fragmentation strategy \"%s\" invalid. Must be one of:\n",
                     argv[optind]);
-            for (strategy = 0; strategy < FRAG_STRATEGY_ERR; strategy++)
+            for (strategy = 0; strategy < STRAT_ERR; strategy++)
                 fprintf(stderr, "  %s\n", strategies[strategy]);
             return EXIT_FAILURE;
         }
 
-    // Run simulation
+    // Initialize
+    GridView view;
+    union neighbors neighbors;
+    void (*exchange_fn)(GridView *, union neighbors const *);
     switch (strategy)
     {
-    case FRAG_STRATEGY_STRIPED:
+    case STRAT_STRIPED:
+        neighbors.striped.comm = MPI_COMM_WORLD;
+        if (!get_view_striped(&view, &neighbors.striped, NUM_COLS, NUM_ROWS))
+            return EXIT_FAILURE;
+        exchange_fn = (void (*)(GridView *, union neighbors const *))exchange_border_cells_striped;
         break;
-    case FRAG_STRATEGY_BRICK:
+    case STRAT_BRICK:
+        neighbors.brick.comm = MPI_COMM_WORLD;
+        if (!get_view_brick(&view, &neighbors.brick, NUM_COLS, NUM_ROWS))
+            return EXIT_FAILURE;
+        exchange_fn = (void (*)(GridView *, union neighbors const *))exchange_border_cells_brick;
         break;
+    default:
+        return EXIT_FAILURE;
     }
+
+#ifdef DEBUG
+    // Test border exchange
+    int world_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    Cell_t *buf1 = (Cell_t *)calloc(view.grid.width * view.grid.height, sizeof(Cell_t));
+    view.grid.data = buf1;
+    for (int i = 1; i <= view.height; i++)
+        for (int j = 1; j <= view.width; j++)
+            row_ptr(&view.grid, i)[j] = world_rank + 1;
+    char fname[64];
+    snprintf(fname, 64, "view%02d.txt", world_rank);
+    FILE *f = fopen(fname, "w");
+    fprintf(f, "Rank %02d:\n", world_rank);
+    fprintf(f, "- row start: %zu\n", view.row_start);
+    fprintf(f, "- col start: %zu\n", view.col_start);
+    fprintf(f, "- height: %zu\n", view.height);
+    fprintf(f, "- width: %zu\n", view.width);
+    fprintf(f, "Initial buffer:\n");
+    for (int i = 0; i < view.grid.height; i++)
+    {
+        for (int j = 0; j < view.grid.width; j++)
+            fprintf(f, "%02hhd ", row_ptr(&view.grid, i)[j]);
+        fprintf(f, "\n");
+    }
+    exchange_fn(&view, &neighbors);
+    fprintf(f, "Exchanged buffer:\n");
+    for (int i = 0; i < view.grid.height; i++)
+    {
+        for (int j = 0; j < view.grid.width; j++)
+            fprintf(f, "%02hhd ", row_ptr(&view.grid, i)[j]);
+        fprintf(f, "\n");
+    }
+    fclose(f);
+    free(buf1);
+#endif
 
     MPI_Finalize();
 
