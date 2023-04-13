@@ -26,7 +26,7 @@ typedef bool Cell_t;
 #define NUM_COLS 13
 #define WRAP_GLOBAL_GRID false
 
-typedef char Cell_t;
+typedef bool Cell_t;
 
 #endif
 

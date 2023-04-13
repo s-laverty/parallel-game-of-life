@@ -27,7 +27,7 @@ extern void free_cudamem_gridview(GridView *grid);
 
 #else
 
-#define MPI_CELL_Datatype MPI_CHAR
+#define MPI_CELL_Datatype MPI_C_BOOL
 
 #endif
 
@@ -599,6 +599,16 @@ int main(int argc, char *argv[])
                 strategies[strategy]);
         return EXIT_FAILURE;
     }
+    //have to allocate memory on the host first
+    view.grid.data =  (bool*) malloc(100*sizeof(bool));
+    view.grid.height = 10;
+    view.grid.width = 10;
+    view.next_grid.data =  (bool*) malloc(100*sizeof(bool));
+    view.next_grid.height = 10;
+    view.next_grid.width = 10;
+    view.width = 9;
+    view.height = 9;
+    //now we can CUDA allocate
     cuda_init_gridview(&view, world_rank);
 
 #ifndef DEBUG
@@ -620,15 +630,15 @@ int main(int argc, char *argv[])
     for (int i = 0; i < view.grid.height; i++)
     {
         for (int j = 0; j < view.grid.width; j++)
-            fprintf(f, "%02hhd ", row_ptr(&view.grid, i)[j]);
+            fprintf(f, "%02hhd ", (char) row_ptr(&view.grid, i)[j]);
         fprintf(f, "\n");
     }
-    exchange_fn(&view, &neighbors);
+    //exchange_fn(&view, &neighbors);
     fprintf(f, "Exchanged buffer:\n");
     for (int i = 0; i < view.grid.height; i++)
     {
         for (int j = 0; j < view.grid.width; j++)
-            fprintf(f, "%02hhd ", row_ptr(&view.grid, i)[j]);
+            fprintf(f, "%02hhd ", (char) row_ptr(&view.grid, i)[j]);
         fprintf(f, "\n");
     }
     fclose(f);
