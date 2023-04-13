@@ -104,6 +104,8 @@ typedef struct
 {
     /** Data in the grid view. */
     Grid grid;
+    /** Output data. */
+    Grid next_grid;
     /** Starting global row index of the grid view. */
     size_t row_start;
     /** Starting global column index of the grid view. */

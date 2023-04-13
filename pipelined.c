@@ -91,6 +91,8 @@ int main(int argc, char** argv){
 	MPI_Status* status;
 	MPI_Request* req;
 	for(int t = 0; t < (TIMESTEPS-1)*2 + HEIGHT/ROWS_PER_GPU; t++){
+		// Calculate one section of this rank's generation and send to next rank
+		// so that the next rank can get started with the next generation
 		if(t >= 2*my_rank && my_t < HEIGHT/ROWS_PER_GPU){
 			row_start = my_t*ROWS_PER_GPU+my_rank;
 			printf("Rank %d processes rows %d to %d at t=%d\n", my_rank, row_start, row_start+ROWS_PER_GPU-1, t);
@@ -109,6 +111,7 @@ int main(int argc, char** argv){
 			my_t++;
 		}
 
+		// Receive data from previous rank which is computing the previous generation
 		if(my_rank > 0 && t >= 2*(my_rank-1) && my_t < HEIGHT/ROWS_PER_GPU-1){
 			int row_start = ROWS_PER_GPU*(t- 2*(my_rank-1)) + my_rank-1;
 			if (row_start+ROWS_PER_GPU-1 >= HEIGHT){ //rows wrap around so it was sent in 2 chunks

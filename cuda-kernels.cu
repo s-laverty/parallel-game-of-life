@@ -12,6 +12,7 @@
 #include <stdbool.h>
 #include <math.h>
 #include "clockcycle.h"
+#include "grid.h"
 
 #define clock_frequency 512000000
 #define threads_per_block 32
@@ -34,8 +35,106 @@ bool board_template[10][10] = {
 	{false, false, false, false, false, false, false, false, true, true},
 };
 
+/********************************************************************************
+ * CUDA Kernel/functions using GridView (used by space division implementations)
+/********************************************************************************
+
+// GridView, for steven
+// also need cuda init & free functions
+/**
+ * @brief Compute 1 time step with a 1-cell padding around the 
+ * edges of the grid. NO edge wrapping.
+ * Each thread computes 1 cell.
+ *
+ * @param grid GridView struct
+ */
+__global__ void compute_timestep_nowrap(GridView* grid){
+	// Each thread the next state for 1 cell
+	unsigned int i = blockIdx.x*blockDim.x + threadIdx.x; 
+
+	if (i < grid->width*grid->height){
+		unsigned int padded_width = grid->width + 2; // actual width including padding
+		unsigned int col = i % grid->width + 1; // add 1 for padding
+		unsigned int row = i / grid->width + 1; // add 1 for padding
+
+		// count the num of alive cells surrounding 
+		unsigned int surrounding_population = 
+			grid->grid.data[padded_width*(row-1) + col-1] + 
+		  	grid->grid.data[padded_width*(row-1) + col] + 
+		  	grid->grid.data[padded_width*(row-1) + col+1] + 
+		  	grid->grid.data[padded_width*row + col-1] + 
+		  	grid->grid.data[padded_width*row + col+1] + 
+		   	grid->grid.data[padded_width*(row+1) + col-1] + 
+		  	grid->grid.data[padded_width*(row+1) + col] + 
+		  	grid->grid.data[padded_width*(row+1) + col+1];
+			
+		// Set next cell state
+		bool next_cell_state = (surrounding_population == 3 || (grid->grid.data[padded_width*row + col] && surrounding_population==2));
+		grid->next_grid.data[padded_width*row + col] = next_cell_state;	
+	  }
+}
+
+
+/**
+ * @brief Calls no wrap kernel
+ *
+ * @param grid GridView input
+ */
+extern "C" void run_kernel_nowrap(GridView* grid){
+	unsigned int grid_size = ceil((grid->width*grid->height) / (float)threads_per_block);
+	compute_timestep_nowrap<<<grid_size, threads_per_block>>>(grid);
+	cudaDeviceSynchronize();
+}
+
+
+/*
+ * @brief Function to initialize a GridView in CUDA memory
+ *
+ * @param grid Grid
+ * @param my_rank Rank of MPI process
+ */
+extern "C" void cuda_init_gridview(GridView* grid, int my_rank){
+  // set a CUDA device for each rank with minimal overlap in device usage
+  int cudaDeviceCount;
+  cudaError_t cE;
+  if( (cE = cudaGetDeviceCount( &cudaDeviceCount)) != cudaSuccess ){
+    printf(" Unable to determine cuda device count, error is %d, count is %d\n", cE, cudaDeviceCount );
+    exit(-1);
+  }
+  if( (cE = cudaSetDevice( my_rank % cudaDeviceCount )) != cudaSuccess )
+  {
+    printf(" Unable to have rank %d set to cuda device %d, error is %d \n",my_rank, (my_rank % cudaDeviceCount), cE);
+    exit(-1);
+  }
+
+  //memory allocation/initialization
+  cudaMallocManaged(&grid, sizeof(GridView));
+  //Grid structs contain pointers that need to be copied explicitly
+  cudaMallocManaged(&(grid->grid.data), grid->grid.width*grid->grid.height*sizeof(bool));
+  cudaMallocManaged(&(grid->next_grid.data), grid->next_grid.width*grid->next_grid.height*sizeof(bool));
+}
+
+/*
+ * @brief Function to free CUDA memory gridview version
+ *
+ * @param grid Current grid
+ */
+extern "C" void free_cudamem_gridview(GridView* grid){
+	cudaFree(grid->grid.data);
+	cudaFree(grid->next_grid.data);
+	cudaFree(grid);
+}
+
+
+
+
+/*************************************************************************
+ * CUDA Kernel/functions using bool* (used by piplined implementation)
+/*************************************************************************
+
 /**
  * @brief Compute 1 time step for the ENTIRE grid input.
+ * Edges wrap around 
  * Each thread computes 1 cell.
  *
  * @param grid Current state of grid section (input)
@@ -72,10 +171,25 @@ __global__ void compute_timestep(bool* grid, bool* next_grid, int width, int hei
 	  }
 }
 
+/**
+ * @brief Function to call CUDA kernel for entire grid
+ *
+ * @param grid Pointer to start of the current grid
+ * @param next_grid Pointer to start of the next timestep grid
+ * @param width Width of entire grid
+ * @param height Height of entire grid
+ */
+extern "C" void run_kernel(bool* grid, bool* next_grid, int width, int height){
+	unsigned int grid_size = ceil((width*height) / (float)threads_per_block);
+	compute_timestep<<<grid_size, threads_per_block>>>(grid, next_grid, width, height);
+	cudaDeviceSynchronize();
+}
+
 
 /**
  * @brief Compute 1 time step for ONE SECTION OF the grid.
- * Will properly compute the output from start_row to end_row.
+ * Will properly compute the output from start_row to end_row
+ * of the input grid. Edges wrap around.
  *
  * @param grid Current state of grid section (input)
  * @param next_grid Next time step state of grid section (output)
@@ -115,19 +229,6 @@ __global__ void compute_timestep_section(bool* grid, bool* next_grid, int width,
 	  }
 }
 
-/**
- * @brief Function to call CUDA kernel for entire grid
- *
- * @param grid Pointer to start of the current grid
- * @param next_grid Pointer to start of the next timestep grid
- * @param width Width of entire grid
- * @param height Height of entire grid
- */
-extern "C" void run_kernel(bool* grid, bool* next_grid, int width, int height){
-	unsigned int grid_size = ceil((width*height) / (float)threads_per_block);
-	compute_timestep<<<grid_size, threads_per_block>>>(grid, next_grid, width, height);
-	cudaDeviceSynchronize();
-}
 
 /**
  * @brief Function to CUDA kernel for a section of the grid
@@ -168,8 +269,6 @@ extern "C" void cuda_init(bool* grid, bool* next_grid, int my_rank){
   }
 
   //memory allocation/initialization
-  //input_section is the input data for this rank
-  //output is the output of the reduce7 kernel (array of the sum calculated in each block)
   cudaMallocManaged(&grid, WIDTH*HEIGHT*sizeof(bool));
   cudaMallocManaged(&next_grid, WIDTH*HEIGHT*sizeof(bool));
 }
