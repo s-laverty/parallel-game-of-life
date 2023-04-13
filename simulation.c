@@ -16,6 +16,11 @@
 #include "clockcycle.h"
 #include "grid.h"
 
+// CUDA functions
+extern void cuda_init_gridview(GridView* grid, int my_rank);
+extern void run_kernel_nowrap(GridView *grid);
+extern void free_cudamem_gridview(GridView *grid);
+
 #ifndef DEBUG
 
 #define MPI_CELL_Datatype MPI_C_BOOL
@@ -298,6 +303,20 @@ void exchange_border_cells_brick(GridView *view, GridViewNeighborsBrick const *n
 }
 
 /**
+ * @brief Helper function for get_view functions. Set the width and height of the grid members of
+ * a grid view.
+ * 
+ * @param view The partially-initialized GridView.
+ */
+static void _set_grid_dims(GridView *view)
+{
+    view->grid.height = view->height + 2;
+    view->grid.width = view->width + 2;
+    view->next_grid.height = view->height + 2;
+    view->next_grid.width = view->width + 2;
+}
+
+/**
  * @brief Get the global grid view and neighbors for this rank using the vertical striped
  * fragmentation strategy. Requires at least 2 ranks.
  *
@@ -331,8 +350,7 @@ bool get_view_striped(GridView *view,
     view->height = height.quot + height_pad;
     view->col_start = 0;
     view->width = num_cols;
-    view->grid.height = view->height + 2;
-    view->grid.width = view->width + 2;
+    _set_grid_dims(view);
 
     // Initialize neighbors
 #if WRAP_GLOBAL_GRID
@@ -430,8 +448,7 @@ bool get_view_brick(GridView *view,
         view->width = ((col_idx + 1 < num_brick_cols) ? width.quot : offset) + width_pad;
     }
 #endif
-    view->grid.height = view->height + 2;
-    view->grid.width = view->width + 2;
+    _set_grid_dims(view);
 
     // Initialize neighbors
     neighbors->above_align = neighbors->below_align = is_odd_row ? view->width - offset : offset;
@@ -515,6 +532,8 @@ int main(int argc, char *argv[])
         GridViewNeighborsStriped striped;
         GridViewNeighborsBrick brick;
     };
+    typedef bool (*get_view_fn_ptr)(GridView *, union neighbors *, size_t, size_t);
+    typedef void (*exchange_fn_ptr)(GridView *, union neighbors const *);
     static char const *arg_parse_err = "Usage: %s [-l checkpoint] strategy\n";
 
     MPI_Init(&argc, &argv);
@@ -552,33 +571,40 @@ int main(int argc, char *argv[])
         }
 
     // Initialize
+    int world_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     GridView view;
     union neighbors neighbors;
-    void (*exchange_fn)(GridView *, union neighbors const *);
+    get_view_fn_ptr get_view_fn;
+    exchange_fn_ptr exchange_fn;
     switch (strategy)
     {
     case STRAT_STRIPED:
         neighbors.striped.comm = MPI_COMM_WORLD;
-        if (!get_view_striped(&view, &neighbors.striped, NUM_COLS, NUM_ROWS))
-            return EXIT_FAILURE;
-        exchange_fn = (void (*)(GridView *, union neighbors const *))exchange_border_cells_striped;
+        get_view_fn = (get_view_fn_ptr)get_view_striped;
+        exchange_fn = (exchange_fn_ptr)exchange_border_cells_striped;
         break;
     case STRAT_BRICK:
         neighbors.brick.comm = MPI_COMM_WORLD;
-        if (!get_view_brick(&view, &neighbors.brick, NUM_COLS, NUM_ROWS))
-            return EXIT_FAILURE;
-        exchange_fn = (void (*)(GridView *, union neighbors const *))exchange_border_cells_brick;
+        get_view_fn = (get_view_fn_ptr)get_view_brick;
+        exchange_fn = (exchange_fn_ptr)exchange_border_cells_brick;
         break;
     default:
         return EXIT_FAILURE;
     }
+    if (!get_view_fn(&view, &neighbors, NUM_COLS, NUM_ROWS))
+    {
+        fprintf(stderr,
+                "Invalid number of ranks for %s fragmentation strategy\n",
+                strategies[strategy]);
+        return EXIT_FAILURE;
+    }
+    cuda_init_gridview(&view, world_rank);
 
-#ifdef DEBUG
+#ifndef DEBUG
+    // TODO run kernel
+#else
     // Test border exchange
-    int world_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-    Cell_t *buf1 = (Cell_t *)calloc(view.grid.width * view.grid.height, sizeof(Cell_t));
-    view.grid.data = buf1;
     for (int i = 1; i <= view.height; i++)
         for (int j = 1; j <= view.width; j++)
             row_ptr(&view.grid, i)[j] = world_rank + 1;
@@ -606,8 +632,9 @@ int main(int argc, char *argv[])
         fprintf(f, "\n");
     }
     fclose(f);
-    free(buf1);
 #endif
+
+    free_cudamem_gridview(&view);
 
     MPI_Finalize();
 
