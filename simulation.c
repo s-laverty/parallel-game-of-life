@@ -17,7 +17,7 @@
 #include "grid.h"
 
 // CUDA functions
-extern void cuda_init_gridview(GridView* grid, int my_rank);
+extern void cuda_init_gridview(GridView *grid, int my_rank);
 extern void run_kernel_nowrap(GridView *grid);
 extern void free_cudamem_gridview(GridView *grid);
 
@@ -305,7 +305,7 @@ void exchange_border_cells_brick(GridView *view, GridViewNeighborsBrick const *n
 /**
  * @brief Helper function for get_view functions. Set the width and height of the grid members of
  * a grid view.
- * 
+ *
  * @param view The partially-initialized GridView.
  */
 static void _set_grid_dims(GridView *view)
@@ -374,7 +374,7 @@ bool get_view_striped(GridView *view,
  * @param num_rows The number of rows in the global data grid.
  * @param num_cols The number of columns in the global data grid.
  * @return true upon success.
- * @return false upon failure; i.e. not enough ranks.
+ * @return false upon failure; i.e. invalid number of ranks.
  */
 bool get_view_brick(GridView *view,
                     GridViewNeighborsBrick *neighbors,
@@ -534,41 +534,55 @@ int main(int argc, char *argv[])
     };
     typedef bool (*get_view_fn_ptr)(GridView *, union neighbors *, size_t, size_t);
     typedef void (*exchange_fn_ptr)(GridView *, union neighbors const *);
-    static char const *arg_parse_err = "Usage: %s [-l checkpoint] strategy\n";
+    static char const *arg_parse_err = "Usage: %s [-l checkpoint] [-o checkpoint] strategy num_steps\n";
 
     MPI_Init(&argc, &argv);
 
     // Parse input args
     char const *load_checkpoint = NULL;
+    char const *save_checkpoint = NULL;
     int opt;
-    while ((opt = getopt(argc, argv, "l")) != -1)
+    while ((opt = getopt(argc, argv, "lo")) != -1)
     {
         switch (opt)
         {
         case 'l':
             load_checkpoint = optarg;
             break;
+        case 'o':
+            save_checkpoint = optarg;
         default:
             fprintf(stderr, arg_parse_err, argv[0]);
             return EXIT_FAILURE;
         }
     }
-    if (argc - optind < 1)
+    int pos_argc = argc - optind;
+    char const **pos_argv = argv + optind;
+    if (pos_argc < 2)
     {
         fprintf(stderr, arg_parse_err, argv[0]);
         return EXIT_FAILURE;
     }
     enum strategy strategy = 0;
-    while (strcmp(argv[optind], strategies[strategy]))
+    while (strcmp(pos_argv[0], strategies[strategy]))
         if (++strategy == STRAT_ERR)
         {
             fprintf(stderr,
                     "Fragmentation strategy \"%s\" invalid. Must be one of:\n",
-                    argv[optind]);
+                    pos_argv[0]);
             for (strategy = 0; strategy < STRAT_ERR; strategy++)
                 fprintf(stderr, "  %s\n", strategies[strategy]);
             return EXIT_FAILURE;
         }
+    char *endptr;
+    unsigned long num_steps = strtoul(pos_argv[1], &endptr, 0);
+    if (*endptr)
+    {
+        fprintf(stderr,
+                "%s is an invalid number steps to run the simulation. Must be a positive integer.\n",
+                pos_argv[1]);
+        return EXIT_FAILURE;
+    }
 
     // Initialize
     int world_rank;
