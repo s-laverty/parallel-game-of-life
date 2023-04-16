@@ -30,6 +30,8 @@ typedef char Cell_t;
 
 #endif
 
+#define CAST_2D(data, width) ((Cell_t (*)[width])data)
+
 /** A grid of binary cell data. */
 typedef struct
 {
