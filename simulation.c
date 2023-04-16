@@ -31,6 +31,33 @@ extern void free_cudamem_gridview(GridView *grid);
 
 #endif
 
+// Hardcoded initial grid configurations
+Cell_t const ACORN[3][7] = {
+    {0, 1, 0, 0, 0, 0, 0},
+    {0, 0, 0, 1, 0, 0, 0},
+    {1, 1, 0, 0, 1, 1, 1},
+};
+Cell_t const BEACON[4][4] = {
+    {1, 1, 0, 0},
+    {1, 0, 0, 0},
+    {0, 0, 0, 1},
+    {0, 0, 1, 1},
+};
+Cell_t const BEEHIVE[3][4] = {
+    {0, 1, 1, 0},
+    {1, 0, 0, 1},
+    {0, 1, 1, 0},
+};
+Cell_t const GLIDER[3][3] = {
+    {0, 1, 0},
+    {0, 0, 1},
+    {1, 1, 1},
+};
+Cell_t const TRAFFIC_LIGHT[2][3] = {
+    {0, 1, 0},
+    {1, 1, 1},
+};
+
 /** The communicator and ranks of neighboring grid views using a horizontal striped layout. */
 typedef struct
 {
@@ -522,27 +549,53 @@ int main(int argc, char *argv[])
     {
         STRAT_STRIPED,
         STRAT_BRICK,
-        STRAT_ERR
+        STRAT_MAX,
     };
-    static char const *strategies[] = {[STRAT_STRIPED] = "striped",
-                                       [STRAT_BRICK] = "brick"};
+    /** Strategy CLI names. */
+    static char const *strategies[] = {
+        [STRAT_STRIPED] = "striped",
+        [STRAT_BRICK] = "brick",
+    };
     /** Union type for grid view neighbors. */
     union neighbors
     {
         GridViewNeighborsStriped striped;
         GridViewNeighborsBrick brick;
     };
+    /** Hardcode configurations. */
+    enum hardcode_config
+    {
+        HC_CONFIG_ACORN,
+        HC_CONFIG_BEACON,
+        HC_CONFIG_BEEHIVE,
+        HC_CONFIG_GLIDER,
+        HC_CONFIG_TRAFFIC_LIGHT,
+        HC_CONFIG_MAX,
+        HC_CONFIG_NONE,
+    };
+    /** Hardcode config CLI names. */
+    static char const *hardcode_configs[] = {
+        [HC_CONFIG_ACORN] = "acorn",
+        [HC_CONFIG_BEACON] = "beacon",
+        [HC_CONFIG_BEEHIVE] = "beehive",
+        [HC_CONFIG_GLIDER] = "glider",
+        [HC_CONFIG_TRAFFIC_LIGHT] = "traffic-light",
+    };
+    /** Function pointer to get_view function. */
     typedef bool (*get_view_fn_ptr)(GridView *, union neighbors *, size_t, size_t);
+    /** Function pointer to border exchange function. */
     typedef void (*exchange_fn_ptr)(GridView *, union neighbors const *);
-    static char const *arg_parse_err = "Usage: %s [-l checkpoint] [-o checkpoint] strategy num_steps\n";
+    /** Argument parse error string. */
+    static char const *arg_parse_err = "Usage: %s [-l checkpoint] [-o checkpoint] [-h hardcode_initializer] strategy num_steps\n";
 
     MPI_Init(&argc, &argv);
 
     // Parse input args
     char const *load_checkpoint = NULL;
     char const *save_checkpoint = NULL;
+    enum hardcode_config hc_config = HC_CONFIG_NONE;
     int opt;
-    while ((opt = getopt(argc, argv, "lo")) != -1)
+    while ((opt = getopt(argc, argv, "loh")) != -1)
     {
         switch (opt)
         {
@@ -551,6 +604,20 @@ int main(int argc, char *argv[])
             break;
         case 'o':
             save_checkpoint = optarg;
+            break;
+        case 'h':
+            hc_config = 0;
+            while (strcmp(optarg, hardcode_configs[hc_config]))
+                if (++hc_config == HC_CONFIG_MAX)
+                {
+                    fprintf(stderr,
+                            "Hardcode initializer \"%s\" invalid. Must be one of:\n",
+                            optarg);
+                    for (hc_config = 0; hc_config < HC_CONFIG_MAX; hc_config++)
+                        fprintf(stderr, "  %s\n", hardcode_configs[hc_config]);
+                    return EXIT_FAILURE;
+                }
+            break;
         default:
             fprintf(stderr, arg_parse_err, argv[0]);
             return EXIT_FAILURE;
@@ -565,12 +632,12 @@ int main(int argc, char *argv[])
     }
     enum strategy strategy = 0;
     while (strcmp(pos_argv[0], strategies[strategy]))
-        if (++strategy == STRAT_ERR)
+        if (++strategy == STRAT_MAX)
         {
             fprintf(stderr,
                     "Fragmentation strategy \"%s\" invalid. Must be one of:\n",
                     pos_argv[0]);
-            for (strategy = 0; strategy < STRAT_ERR; strategy++)
+            for (strategy = 0; strategy < STRAT_MAX; strategy++)
                 fprintf(stderr, "  %s\n", strategies[strategy]);
             return EXIT_FAILURE;
         }
@@ -614,9 +681,10 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
     cuda_init_gridview(&view, world_rank);
+    memset(view.grid.data, 0, view.grid.width * view.grid.height * sizeof(Cell_t));
+    memset(view.next_grid.data, 0, view.next_grid.width * view.next_grid.height * sizeof(Cell_t));
 
 #ifndef DEBUG
-    // TODO run kernel
 #else
     // Test border exchange
     for (int i = 1; i <= view.height; i++)
