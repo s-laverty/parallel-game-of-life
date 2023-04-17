@@ -15,6 +15,7 @@
 
 #include "clockcycle.h"
 #include "grid.h"
+#include "pipelined.h"
 
 // CUDA functions
 extern void cuda_init_gridview(GridView *grid, int my_rank);
@@ -584,12 +585,14 @@ int main(int argc, char *argv[])
     {
         STRAT_STRIPED,
         STRAT_BRICK,
-        STRAT_MAX,
+        STRAT_PIPELINE,
+        STRAT_MAX
     };
     /** Strategy CLI names. */
     static char const *strategies[] = {
         [STRAT_STRIPED] = "striped",
         [STRAT_BRICK] = "brick",
+        [STRAT_PIPELINE] = "pipeline"
     };
     /** Union type for grid view neighbors. */
     union neighbors
@@ -706,6 +709,10 @@ int main(int argc, char *argv[])
         get_view_fn = (get_view_fn_ptr)get_view_brick;
         exchange_fn = (exchange_fn_ptr)exchange_border_cells_brick;
         break;
+    case STRAT_PIPELINE:
+        run_pipelined(world_rank, num_steps); //re-route to pipelined implementation in pipeline.c
+        MPI_Finalize();
+        return EXIT_SUCCESS;
     default:
         return EXIT_FAILURE;
     }

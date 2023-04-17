@@ -5,7 +5,7 @@
 
 #include <stdint.h>
 
-uint64_t clock_now(void)
+inline uint64_t clock_now(void)
 {
   unsigned int tbl, tbu0, tbu1;
 
