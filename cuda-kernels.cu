@@ -39,8 +39,6 @@ bool board_template[10][10] = {
  * CUDA Kernel/functions using GridView (used by space division implementations)
 /********************************************************************************
 
-// GridView, for steven
-// also need cuda init & free functions
 /**
  * @brief Compute 1 time step with a 1-cell padding around the 
  * edges of the grid. NO edge wrapping.

@@ -36,7 +36,6 @@ bool grid_template[10][10] = {
 	{false, false, false, false, false, false, false, false, true, true},
 };
 
-
 void run_pipelined(int my_rank, unsigned long num_steps){
 	int num_ranks;
 	MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
@@ -94,10 +93,10 @@ void run_pipelined(int my_rank, unsigned long num_steps){
 					
 					if (row_end >= HEIGHT){ //rows wrap around so it was sent in 2 chunks
 						MPI_Recv(grid+WIDTH*row_start, WIDTH*(HEIGHT-row_start), MPI_C_BOOL,prev_rank, 0, MPI_COMM_WORLD, status);
-						MPI_Recv(grid, WIDTH*((row_end-row_start)-(HEIGHT-row_start)), MPI_C_BOOL, prev_rank, 0, MPI_COMM_WORLD, status);
+						MPI_Recv(grid, WIDTH*((row_end-row_start+1)-(HEIGHT-row_start)), MPI_C_BOOL, prev_rank, 0, MPI_COMM_WORLD, status);
 					}
 					else{ // don't have to wrap around
-						MPI_Recv(grid+WIDTH*row_start, WIDTH*ROWS_PER_GPU, MPI_C_BOOL, prev_rank, 0, MPI_COMM_WORLD, status);
+						MPI_Recv(grid+WIDTH*row_start, WIDTH*(row_end-row_start+1), MPI_C_BOOL, prev_rank, 0, MPI_COMM_WORLD, status);
 					}
 					printf("Rank %d receives rows %d to %d from %d at t=%d\n", my_rank, row_start, row_end, prev_rank, t);
 				}
@@ -111,10 +110,10 @@ void run_pipelined(int my_rank, unsigned long num_steps){
 				
 				if (row_end >= HEIGHT){ //rows wrap around so it was sent in 2 chunks
 					MPI_Recv(grid+WIDTH*row_start, WIDTH*(HEIGHT-row_start), MPI_C_BOOL,prev_rank, 0, MPI_COMM_WORLD, status);
-					MPI_Recv(grid, WIDTH*((row_end-row_start)-(HEIGHT-row_start)), MPI_C_BOOL, prev_rank, 0, MPI_COMM_WORLD, status);
+					MPI_Recv(grid, WIDTH*((row_end-row_start+1)-(HEIGHT-row_start)), MPI_C_BOOL, prev_rank, 0, MPI_COMM_WORLD, status);
 				}
 				else{ // don't have to wrap around
-					MPI_Recv(grid+WIDTH*row_start, WIDTH*ROWS_PER_GPU, MPI_C_BOOL, prev_rank, 0, MPI_COMM_WORLD, status);
+					MPI_Recv(grid+WIDTH*row_start, WIDTH*(row_end-row_start+1), MPI_C_BOOL, prev_rank, 0, MPI_COMM_WORLD, status);
 				}
 				printf("Rank %d receives rows %d to %d from %d at t=%d\n", my_rank, row_start, row_end, prev_rank, t);
 			}
@@ -132,10 +131,10 @@ void run_pipelined(int my_rank, unsigned long num_steps){
 				printf("Rank %d sends rows %d to %d to rank %d at t=%d\n",  my_rank, row_start, row_end, next_rank, t);
 				if (row_end >= HEIGHT){ //rows wrap around so must send in 2 chunks
 					MPI_Isend(next_grid+WIDTH*row_start, WIDTH*(HEIGHT-row_start), MPI_C_BOOL, next_rank, 0, MPI_COMM_WORLD, &req);
-					MPI_Isend(next_grid, WIDTH*((row_end-row_start)-(HEIGHT-row_start)), MPI_C_BOOL, next_rank, 0, MPI_COMM_WORLD, &req);
+					MPI_Isend(next_grid, WIDTH*((row_end-row_start+1)-(HEIGHT-row_start)), MPI_C_BOOL, next_rank, 0, MPI_COMM_WORLD, &req);
 				}
 				else{ // don't have to wrap around
-					MPI_Isend(next_grid+WIDTH*row_start, WIDTH*ROWS_PER_GPU, MPI_C_BOOL, next_rank, 0, MPI_COMM_WORLD, &req);
+					MPI_Isend(next_grid+WIDTH*row_start, WIDTH*(row_end-row_start+1), MPI_C_BOOL, next_rank, 0, MPI_COMM_WORLD, &req);
 				}
 			}
 			my_t++;
