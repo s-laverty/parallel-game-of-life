@@ -542,40 +542,46 @@ bool get_view_brick(GridView *view,
     return true;
 }
 
-// /**
-//  * @brief Copy a portion of an initialization buffer to the view's data buffer.
-//  *
-//  * @param view A view of the global data grid.
-//  * @param config An initialization buffer.
-//  * @param row_start The global row start index of the initialization buffer.
-//  * @param col_start The global column start index of the initialization buffer.
-//  * @param height The number of rows of the initialization buffer.
-//  * @param width The number of columns of the initialization buffer.
-//  */
-// void init_view(GridView *view,
-//                Cell_t const *config,
-//                size_t row_start,
-//                size_t col_start,
-//                size_t height,
-//                size_t width)
-// {
-//     size_t row_overlap_start = (view->row_start > row_start) ? view->row_start : row_start;
-//     size_t row_overlap_height = (view->height < height) ? view->height : height;
-//     size_t row_overlap_end = ((view->row_start < row_start) ? view->row_start : row_start) +
-//                              row_overlap_height;
-//     size_t col_overlap_start = (view->col_start > col_start) ? view->col_start : col_start;
-//     size_t col_overlap_width = (view->width < width) ? view->width : width;
-//     size_t col_overlap_end = ((view->col_start < col_start) ? view->col_start : col_start) +
-//                              col_overlap_width;
-//     if (col_overlap_end <= col_overlap_start)
-//         return;
-//     for (size_t i = row_overlap_start; i < row_overlap_end; i++)
-//         set_row(&view->grid,
-//                 CAST_2D(config, width)[i - row_start][col_overlap_start - col_start],
-//                 1 + i - view->row_start,
-//                 1 + col_overlap_start - view->col_start,
-//                 1 + col_overlap_end - view->col_start);
-// }
+/**
+ * @brief Copy a portion of an initialization buffer to the view's data buffer.
+ *
+ * @param view A view of the global data grid.
+ * @param config An initialization buffer.
+ * @param row_start The global row start index of the initialization buffer.
+ * @param col_start The global column start index of the initialization buffer.
+ * @param height The number of rows of the initialization buffer.
+ * @param width The number of columns of the initialization buffer.
+ */
+void init_view(GridView *view,
+               Cell_t const *config,
+               size_t row_start,
+               size_t col_start,
+               size_t height,
+               size_t width)
+{
+    // Start at higher row start
+    size_t row_overlap_start = (view->row_start > row_start) ? view->row_start : row_start;
+    // End at lower row end
+    size_t row_overlap_end = (view->row_start + view->height < row_start + height)
+                                 ? view->row_start + view->height
+                                 : row_start + height;
+    // Start at higher col start
+    size_t col_overlap_start = (view->col_start > col_start) ? view->col_start : col_start;
+    // End at lower col end
+    size_t col_overlap_end = (view->col_start + view->width < col_start + width)
+                                 ? view->col_start + view->width
+                                 : col_start + width;
+    if (col_overlap_end > col_overlap_start)
+    {
+        size_t length = col_overlap_end - col_overlap_start;
+        for (size_t i = row_overlap_start; i < row_overlap_end; i++)
+            set_row(&view->grid,
+                    config + (i - row_start) * width + col_overlap_start - col_start,
+                    1 + i - view->row_start,
+                    1 + col_overlap_start - view->col_start,
+                    length);
+    }
+}
 
 int main(int argc, char *argv[])
 {
@@ -621,7 +627,7 @@ int main(int argc, char *argv[])
     /** Function pointer to border exchange function. */
     typedef void (*exchange_fn_ptr)(GridView *, union neighbors const *);
     /** Argument parse error string. */
-    static char const *arg_parse_err = "Usage: %s [-l checkpoint] [-o checkpoint] [-h hardcode_initializer] strategy num_steps\n";
+    static char const *arg_parse_err = "Usage: %s [-l checkpoint] [-o checkpoint] [-i hardcode_initializer] strategy num_steps\n";
 
     MPI_Init(&argc, &argv);
 
@@ -630,7 +636,7 @@ int main(int argc, char *argv[])
     char const *save_checkpoint = NULL;
     enum hardcode_config hc_config = HC_CONFIG_NONE;
     int opt;
-    while ((opt = getopt(argc, argv, "loh")) != -1)
+    while ((opt = getopt(argc, argv, "l:o:i:")) != -1)
     {
         switch (opt)
         {
@@ -640,7 +646,7 @@ int main(int argc, char *argv[])
         case 'o':
             save_checkpoint = optarg;
             break;
-        case 'h':
+        case 'i':
             hc_config = 0;
             while (strcmp(optarg, hardcode_configs[hc_config]))
                 if (++hc_config == HC_CONFIG_MAX)
@@ -658,6 +664,9 @@ int main(int argc, char *argv[])
             return EXIT_FAILURE;
         }
     }
+#ifdef DEBUG
+    printf("Finished processing optional CLI args\n");
+#endif
     int pos_argc = argc - optind;
     char **pos_argv = argv + optind;
     if (pos_argc < 2)
@@ -678,7 +687,6 @@ int main(int argc, char *argv[])
         }
     char *endptr;
     unsigned long num_steps = strtoul(pos_argv[1], &endptr, 0);
-    (void)num_steps; // TODO remove
     if (*endptr)
     {
         fprintf(stderr,
@@ -686,6 +694,9 @@ int main(int argc, char *argv[])
                 pos_argv[1]);
         return EXIT_FAILURE;
     }
+#ifdef DEBUG
+    printf("Finished processing positional CLI args\n");
+#endif
 
     // Initialize
     int world_rank;
@@ -719,13 +730,8 @@ int main(int argc, char *argv[])
     cuda_init_gridview(&view, world_rank);
     memset(view.grid.data, 0, view.grid.width * view.grid.height * sizeof(Cell_t));
     memset(view.next_grid.data, 0, view.next_grid.width * view.next_grid.height * sizeof(Cell_t));
-
-#ifndef DEBUG
-#else
+#ifdef DEBUG
     // Test border exchange
-    for (int i = 1; i <= view.height; i++)
-        for (int j = 1; j <= view.width; j++)
-            row_ptr(&view.grid, i)[j] = world_rank + 1;
     char fname[64];
     snprintf(fname, 64, "view%02d.txt", world_rank);
     FILE *f = fopen(fname, "w");
@@ -734,6 +740,10 @@ int main(int argc, char *argv[])
     fprintf(f, "- col start: %zu\n", view.col_start);
     fprintf(f, "- height: %zu\n", view.height);
     fprintf(f, "- width: %zu\n", view.width);
+    fprintf(f, "Exchange test:\n");
+    for (int i = 1; i <= view.height; i++)
+        for (int j = 1; j <= view.width; j++)
+            row_ptr(&view.grid, i)[j] = world_rank + 1;
     fprintf(f, "Initial buffer:\n");
     for (int i = 0; i < view.grid.height; i++)
     {
@@ -749,6 +759,67 @@ int main(int argc, char *argv[])
             fprintf(f, "%02hhd ", row_ptr(&view.grid, i)[j]);
         fprintf(f, "\n");
     }
+    memset(view.grid.data, 0, view.grid.width * view.grid.height * sizeof(Cell_t));
+#endif
+    switch (hc_config)
+    {
+    case HC_CONFIG_ACORN:
+        init_view(&view, &ACORN[0][0], 0, 0, 3, 7);
+        break;
+    case HC_CONFIG_BEACON:
+        init_view(&view, &BEACON[0][0], 0, 0, 4, 4);
+        break;
+    case HC_CONFIG_BEEHIVE:
+        init_view(&view, &BEEHIVE[0][0], 0, 0, 3, 4);
+        break;
+    case HC_CONFIG_GLIDER:
+        init_view(&view, &GLIDER[0][0], 0, 0, 3, 3);
+        break;
+    case HC_CONFIG_TRAFFIC_LIGHT:
+        init_view(&view, &TRAFFIC_LIGHT[0][0], 0, 0, 2, 3);
+        break;
+    case HC_CONFIG_NONE:
+        // TODO load checkpoint
+        break;
+    default:
+        return EXIT_FAILURE;
+    }
+    exchange_fn(&view, &neighbors);
+#ifdef DEBUG
+    // Test initializer
+    fprintf(f, "Simulation test:\n");
+    fprintf(f, "Initial buffer:\n");
+    for (int i = 0; i < view.grid.height; i++)
+    {
+        for (int j = 0; j < view.grid.width; j++)
+            fprintf(f, "%hhd ", row_ptr(&view.grid, i)[j]);
+        fprintf(f, "\n");
+    }
+#endif
+
+    // Run simulation
+    for (unsigned long i = 0; i < num_steps; i++)
+    {
+        // Run kernel
+        run_kernel_nowrap(&view);
+        // Swap grid and next_grid
+        Cell_t *tmp = view.grid.data;
+        view.grid.data = view.next_grid.data;
+        view.next_grid.data = tmp;
+        // Exchange border cells
+        exchange_fn(&view, &neighbors);
+#ifdef DEBUG
+        fprintf(f, "Buffer %lu:\n", i + 1);
+        for (int i = 0; i < view.grid.height; i++)
+        {
+            for (int j = 0; j < view.grid.width; j++)
+                fprintf(f, "%hhd ", row_ptr(&view.grid, i)[j]);
+            fprintf(f, "\n");
+        }
+#endif
+    }
+
+#ifdef DEBUG
     fclose(f);
 #endif
 
