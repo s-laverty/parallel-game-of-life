@@ -24,13 +24,11 @@ typedef bool Cell_t;
 
 #define NUM_ROWS 13
 #define NUM_COLS 13
-#define WRAP_GLOBAL_GRID false
+#define WRAP_GLOBAL_GRID true
 
 typedef char Cell_t;
 
 #endif
-
-#define CAST_2D(data, width) ((Cell_t (*)[width])data)
 
 /** A grid of binary cell data. */
 typedef struct
