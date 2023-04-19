@@ -9,10 +9,13 @@
 
 #include "clockcycle.h"
 
-// these have to match the WIDTH & HEIGHT in cuda-kernels.cu
+// width/height/input file are hardcoded here for now while testing
 #define WIDTH 20
-#define HEIGHT 11
-#define ROWS_PER_GPU 4 //number of rows computed by each GPU every time step
+#define HEIGHT 20
+#define INPUT_FILE "test_board_3.txt"
+
+
+#define ROWS_PER_GPU 10 //number of rows computed by each GPU every time step
 #define clock_frequency 512000000
 
 
