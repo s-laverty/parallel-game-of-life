@@ -151,11 +151,20 @@ void run_pipelined(int my_rank, int HEIGHT, int WIDTH, unsigned long num_steps, 
 		}
 	}
 	end_cycles = clock_now();
-	printf("Rank %d finished in %lf\n",  my_rank, ((double)(end_cycles-start_cycles))/clock_frequency);
+	//printf("Rank %d finished in %lf\n",  my_rank, ((double)(end_cycles-start_cycles))/clock_frequency);
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	// Print output
 	if (my_rank == (num_steps-1) % num_ranks){
+		printf("Results:\n");
+		printf("- %lu simulations\n", num_steps);
+		printf("- grid size %d\n", WIDTH);
+		printf("- %d ranks\n", num_ranks);
+		printf("- pipeline strategy\n");
+		printf("- time taken to run: %lf\n", ((double)(end_cycles-start_cycles))/clock_frequency);
+	}
+
+	// Print output
+	/*if (my_rank == (num_steps-1) % num_ranks){
 		printf("\nRank %d output (%lu generations have passed)\n", my_rank, num_steps);
 		for(int r = 0; r < HEIGHT; r++){
 			for(int c = 0; c < WIDTH; c++){
@@ -163,7 +172,7 @@ void run_pipelined(int my_rank, int HEIGHT, int WIDTH, unsigned long num_steps, 
 			}
 			printf("\n");
 		}	
-	}
+	}*/
 
 	free_cudamemory(grid, next_grid);
 }
@@ -171,23 +180,32 @@ void run_pipelined(int my_rank, int HEIGHT, int WIDTH, unsigned long num_steps, 
 //for testing purposes 
 //load hardcode config
 void load_hardcode_config(const char* hc_config, bool* grid, int width, int height){
+	printf("%d %d %s\n", width, height, hc_config);
 	for(int r = 0; r < height; r++){
 		for(int c = 0; c < width; c++){
-			if ( strncmp(hc_config, "acorn", 5) && r < 4 && c < 7){
+			if ( strncmp(hc_config, "acorn", 5)==0 && r < 4 && c < 7){
 				grid[r*width + c] = ACORN[r][c];
-			} else if (strncmp(hc_config, "beacon", 6) && r < 4 && c < 4){
+			} else if (strncmp(hc_config, "beacon", 6)==0 && r < 4 && c < 4){
 				grid[r*width + c] = BEACON[r][c];
-			} else if(strncmp(hc_config, "beehive", 7) && r < 3 && c < 4){
+			} else if(strncmp(hc_config, "beehive", 7)==0 && r < 3 && c < 4){
 				grid[r*width + c] = BEEHIVE[r][c];
-			} else if (strncmp(hc_config, "glider", 6) && r < 3 && c < 3){
+			} else if (strncmp(hc_config, "glider", 6)==0 && r < 3 && c < 3){
 				grid[r*width + c] = GLIDER[r][c];
-			} else if (strncmp(hc_config, "traffic-light", 13) && r < 2 && c < 3){
+			} else if (strncmp(hc_config, "traffic-light", 13)==0 && r < 2 && c < 3){
 				grid[r*width + c] = TRAFFIC_LIGHT[r][c];
 			} else {
 				grid[r*width + c] = false;
 			}			
 		}
 	}	
+
+	/*printf("INPUT:\n");
+	for(int r = 0; r < height; r++){
+		for(int c = 0; c < width; c++){
+			printf("%d ", grid[r*width + c]);
+		}
+		printf("\n");
+	}	*/
 
 }
 
