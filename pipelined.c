@@ -182,36 +182,39 @@ void run_pipelined(int my_rank, unsigned long HEIGHT, unsigned long WIDTH, unsig
 void load_hardcode_config(const char* hc_config, bool* grid, unsigned long width, unsigned long height){
 	printf("%lu %lu %s\n", width, height, hc_config);
 
-	int type = 0;
-	if ( strncmp(hc_config, "acorn", 5)==0){
-		type = 1;
-	} else if (strncmp(hc_config, "beacon", 6)==0){
-		type = 2;
-	} else if(strncmp(hc_config, "beehive", 7)==0){
-		type = 3;
-	} else if (strncmp(hc_config, "glider", 6)==0){
-		type = 4;
-	} else if (strncmp(hc_config, "traffic-light", 13)==0){
-		type = 5;
-	} 
+	memset(grid, 0, width * height * sizeof(bool));
 
-	for(int r = 0; r < height; r++){
-		for(int c = 0; c < width; c++){
-			if ( type == 1 && r < 4 && c < 7){
+	if ( strncmp(hc_config, "acorn", 5)==0){
+		for(int r = 0; r < 4; r++){
+			for(int c = 0; c < 7; c++){
 				grid[r*width + c] = ACORN[r][c];
-			} else if (type == 2 && r < 4 && c < 4){
-				grid[r*width + c] = BEACON[r][c];
-			} else if(type == 3 && r < 3 && c < 4){
-				grid[r*width + c] = BEEHIVE[r][c];
-			} else if (type == 4 && r < 3 && c < 3){
-				grid[r*width + c] = GLIDER[r][c];
-			} else if (type == 5 && r < 2 && c < 3){
-				grid[r*width + c] = TRAFFIC_LIGHT[r][c];
-			} else {
-				grid[r*width + c] = false;
-			}			
+			}
 		}
-	}	
+	} else if (strncmp(hc_config, "beacon", 6)==0){
+		for(int r = 0; r < 4; r++){
+			for(int c = 0; c < 4; c++){
+				grid[r*width + c] = BEACON[r][c];
+			}
+		}
+	} else if(strncmp(hc_config, "beehive", 7)==0){
+		for(int r = 0; r < 3; r++){
+			for(int c = 0; c < 4; c++){
+				grid[r*width + c] = BEEHIVE[r][c];
+			}
+		}
+	} else if (strncmp(hc_config, "glider", 6)==0){
+		for(int r = 0; r < 3; r++){
+			for(int c = 0; c < 3; c++){
+				grid[r*width + c] = GLIDER[r][c];
+			}
+		}
+	} else if (strncmp(hc_config, "traffic-light", 13)==0){
+		for(int r = 0; r < 2; r++){
+			for(int c = 0; c < 3; c++){
+				grid[r*width + c] = TRAFFIC_LIGHT[r][c];
+			}
+		}
+	} 
 
 	/*printf("INPUT:\n");
 	for(int r = 0; r < height; r++){
