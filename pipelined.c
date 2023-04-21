@@ -44,7 +44,7 @@ void run_pipelined(int my_rank, int HEIGHT, int WIDTH, unsigned long num_steps, 
 	// Allocate memory
 	bool* grid; //current time step grid
 	bool* next_grid; //next time step grid
-	cuda_init(&grid, &next_grid, NUM_COLS, NUM_ROWS, my_rank);
+	cuda_init(&grid, &next_grid, WIDTH, HEIGHT, my_rank);
 
 	// load in initial data for rank 0
 	if (my_rank == 0){
