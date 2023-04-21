@@ -598,8 +598,7 @@ int main(int argc, char *argv[])
     static char const *strategies[] = {
         [STRAT_STRIPED] = "striped",
         [STRAT_BRICK] = "brick",
-        [STRAT_PIPELINE] = "pipeline"
-    };
+        [STRAT_PIPELINE] = "pipeline"};
     /** Union type for grid view neighbors. */
     union neighbors
     {
@@ -625,12 +624,37 @@ int main(int argc, char *argv[])
         [HC_CONFIG_GLIDER] = "glider",
         [HC_CONFIG_TRAFFIC_LIGHT] = "traffic-light",
     };
+    /** Grid sizes. */
+    enum grid_size
+    {
+        GRID_SIZE_SMALL,
+        GRID_SIZE_MEDIUM,
+        GRID_SIZE_LARGE,
+        GRID_SIZE_XXL,
+        GRID_SIZE_MAX,
+    };
+#ifndef DEBUG
+    /** Grid size array. */
+    static size_t const grid_sizes[] = {
+        [GRID_SIZE_SMALL] = 4096,   // 2^12
+        [GRID_SIZE_MEDIUM] = 32768, // 2^15
+        [GRID_SIZE_LARGE] = 262144, // 2^18
+        [GRID_SIZE_XXL] = 1048576,  // 2^20
+    };
+#endif
+    /** Grid size CLI names. */
+    static char const *grid_size_names[] = {
+        [GRID_SIZE_SMALL] = "s",
+        [GRID_SIZE_MEDIUM] = "m",
+        [GRID_SIZE_LARGE] = "l",
+        [GRID_SIZE_XXL] = "xl",
+    };
     /** Function pointer to get_view function. */
     typedef bool (*get_view_fn_ptr)(GridView *, union neighbors *, size_t, size_t);
     /** Function pointer to border exchange function. */
     typedef void (*exchange_fn_ptr)(GridView *, union neighbors const *);
     /** Argument parse error string. */
-    static char const *arg_parse_err = "Usage: %s [-l checkpoint] [-o checkpoint] [-i hardcode_initializer] strategy num_steps\n";
+    static char const *arg_parse_err = "Usage: %s [-l checkpoint] [-o checkpoint] [-i hardcode_initializer] [-s grid_size] strategy num_steps\n";
 
     MPI_Init(&argc, &argv);
 
@@ -638,8 +662,9 @@ int main(int argc, char *argv[])
     char const *load_checkpoint = NULL;
     char const *save_checkpoint = NULL;
     enum hardcode_config hc_config = HC_CONFIG_NONE;
+    enum grid_size grid_size = GRID_SIZE_MEDIUM;
     int opt;
-    while ((opt = getopt(argc, argv, "l:o:i:")) != -1)
+    while ((opt = getopt(argc, argv, "l:o:i:s:")) != -1)
     {
         switch (opt)
         {
@@ -659,6 +684,19 @@ int main(int argc, char *argv[])
                             optarg);
                     for (hc_config = 0; hc_config < HC_CONFIG_MAX; hc_config++)
                         fprintf(stderr, "  %s\n", hardcode_configs[hc_config]);
+                    return EXIT_FAILURE;
+                }
+            break;
+        case 's':
+            grid_size = 0;
+            while (strcmp(optarg, grid_size_names[grid_size]))
+                if (++grid_size == GRID_SIZE_MAX)
+                {
+                    fprintf(stderr,
+                            "Grid size \"%s\" invalid. Must be one of:\n",
+                            optarg);
+                    for (grid_size = 0; grid_size < GRID_SIZE_MAX; grid_size++)
+                        fprintf(stderr, "  %s\n", grid_size_names[grid_size]);
                     return EXIT_FAILURE;
                 }
             break;
@@ -703,7 +741,9 @@ int main(int argc, char *argv[])
 
     // Initialize
     int world_rank;
+    int world_size;
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     GridView view;
     union neighbors neighbors;
     get_view_fn_ptr get_view_fn;
@@ -721,13 +761,17 @@ int main(int argc, char *argv[])
         exchange_fn = (exchange_fn_ptr)exchange_border_cells_brick;
         break;
     case STRAT_PIPELINE:
-        run_pipelined(world_rank, NUM_ROWS, NUM_COLS, num_steps, hardcode_configs[hc_config]); //re-route to pipelined implementation in pipeline.c
+        run_pipelined(world_rank, grid_sizes[grid_size], grid_sizes[grid_size], num_steps, hardcode_configs[hc_config]); //re-route to pipelined implementation in pipeline.c
         MPI_Finalize();
         return EXIT_SUCCESS;
     default:
         return EXIT_FAILURE;
     }
-    if (!get_view_fn(&view, &neighbors, NUM_COLS, NUM_ROWS))
+#ifdef DEBUG
+    if (!get_view_fn(&view, &neighbors, NUM_COLS_DEBUG, NUM_ROWS_DEBUG))
+#else
+    if (!get_view_fn(&view, &neighbors, grid_sizes[grid_size], grid_sizes[grid_size]))
+#endif
     {
         fprintf(stderr,
                 "Invalid number of ranks for %s fragmentation strategy\n",
@@ -805,6 +849,9 @@ int main(int argc, char *argv[])
 #endif
 
     // Run simulation
+    uint64_t start, end;
+    MPI_Barrier(MPI_COMM_WORLD);
+    start = clock_now();
     for (unsigned long i = 0; i < num_steps; i++)
     {
         // Run kernel
@@ -825,10 +872,21 @@ int main(int argc, char *argv[])
         }
 #endif
     }
+    end = clock_now();
 
 #ifdef DEBUG
     fclose(f);
+#else
+    if (!world_rank)
+        printf("Results:\n- %lu simulations\n- grid size %zu\n- %d ranks\n- %s strategy\n- time taken to run: %.6f\n",
+               num_steps,
+               grid_sizes[grid_size],
+               world_size,
+               strategies[strategy],
+               (double)(end - start) / clock_frequency);
 #endif
+
+    // TODO save results to file
 
     free_cudamem_gridview(&view);
 
