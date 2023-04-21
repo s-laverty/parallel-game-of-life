@@ -2,7 +2,7 @@
 
 #SBATCH --partition=el8
 #SBATCH --gres=gpu:6
-#SBATCH -t 01:00:00
+#SBATCH -t 0:30:00
 
 while getopts "l" o; do
     case "$o" in
