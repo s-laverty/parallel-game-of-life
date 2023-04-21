@@ -741,7 +741,9 @@ int main(int argc, char *argv[])
 
     // Initialize
     int world_rank;
+    int world_size;
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     GridView view;
     union neighbors neighbors;
     get_view_fn_ptr get_view_fn;
@@ -847,6 +849,9 @@ int main(int argc, char *argv[])
 #endif
 
     // Run simulation
+    uint64_t start, end;
+    MPI_Barrier(MPI_COMM_WORLD);
+    start = clock_now();
     for (unsigned long i = 0; i < num_steps; i++)
     {
         // Run kernel
@@ -867,10 +872,20 @@ int main(int argc, char *argv[])
         }
 #endif
     }
+    end = clock_now();
 
 #ifdef DEBUG
     fclose(f);
+#else
+    if (!world_rank)
+        printf("Results:\n- %lu simulations\n- grid size %zu\n- %d ranks\n- %s strategy\n- time taken to run: %.6f\n",
+               num_steps,
+               grid_sizes[grid_size],
+               world_size,
+               (double)(end - start) / clock_frequency);
 #endif
+
+    // TODO save results to file
 
     free_cudamem_gridview(&view);
 
