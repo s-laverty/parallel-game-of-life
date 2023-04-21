@@ -33,21 +33,25 @@ bool grid_template[10][10] = {
 	{false, false, false, false, false, false, false, false, true, true},
 };
 
-//file loading for testing purposes
-void load_input_file(char* filename, bool* grid);
 
-void run_pipelined(int my_rank, unsigned long num_steps){
+//file loading for testing purposes
+void load_input_file(char* filename, bool* grid, int HEIGHT, int WIDTH);
+void load_hardcode_config(const char* hc_config, bool* grid, int width, int height);
+
+void run_pipelined(int my_rank, int HEIGHT, int WIDTH, unsigned long num_steps, const char* hc_config){
 	int num_ranks;
 	MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
 	// Allocate memory
 	bool* grid; //current time step grid
 	bool* next_grid; //next time step grid
-	cuda_init(&grid, &next_grid, WIDTH, HEIGHT, my_rank);
+	cuda_init(&grid, &next_grid, NUM_COLS, NUM_ROWS, my_rank);
 
-	// load in initilal data for rank 0
+	// load in initial data for rank 0
 	if (my_rank == 0){
-		char filename[] = INPUT_FILE; 
-		load_input_file(filename, grid);	
+		//char filename[] = INPUT_FILE; 
+		//load_input_file(filename, grid, HEIGHT, WIDTH);	
+		load_hardcode_config(hc_config, grid, WIDTH, HEIGHT);
+
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -164,9 +168,32 @@ void run_pipelined(int my_rank, unsigned long num_steps){
 	free_cudamemory(grid, next_grid);
 }
 
+//for testing purposes 
+//load hardcode config
+void load_hardcode_config(const char* hc_config, bool* grid, int width, int height){
+	for(int r = 0; r < height; r++){
+		for(int c = 0; c < width; c++){
+			if ( strncmp(hc_config, "acorn", 5) && r < 4 && c < 7){
+				grid[r*width + c] = ACORN[r][c];
+			} else if (strncmp(hc_config, "beacon", 6) && r < 4 && c < 4){
+				grid[r*width + c] = BEACON[r][c];
+			} else if(strncmp(hc_config, "beehive", 7) && r < 3 && c < 4){
+				grid[r*width + c] = BEEHIVE[r][c];
+			} else if (strncmp(hc_config, "glider", 6) && r < 3 && c < 3){
+				grid[r*width + c] = GLIDER[r][c];
+			} else if (strncmp(hc_config, "traffic-light", 13) && r < 2 && c < 3){
+				grid[r*width + c] = TRAFFIC_LIGHT[r][c];
+			} else {
+				grid[r*width + c] = false;
+			}			
+		}
+	}	
+
+}
+
 // for testing purposes
 // load input file
-void load_input_file(char* filename, bool* grid){
+void load_input_file(char* filename, bool* grid, int HEIGHT, int WIDTH){
 	// since each rank computes a separate generation,
 	// only rank 0 needs the initial grid
 

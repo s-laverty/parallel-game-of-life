@@ -721,7 +721,7 @@ int main(int argc, char *argv[])
         exchange_fn = (exchange_fn_ptr)exchange_border_cells_brick;
         break;
     case STRAT_PIPELINE:
-        run_pipelined(world_rank, num_steps); //re-route to pipelined implementation in pipeline.c
+        run_pipelined(world_rank, NUM_ROWS, NUM_COLS, num_steps, hardcode_configs[hc_config]); //re-route to pipelined implementation in pipeline.c
         MPI_Finalize();
         return EXIT_SUCCESS;
     default:

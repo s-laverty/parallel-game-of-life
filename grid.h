@@ -30,6 +30,14 @@ typedef char Cell_t;
 
 #endif
 
+// Hardcoded initial grid configurations
+extern Cell_t const ACORN[3][7];
+extern Cell_t const BEACON[4][4];
+extern Cell_t const BEEHIVE[3][4];
+extern Cell_t const GLIDER[3][3];
+extern Cell_t const TRAFFIC_LIGHT[2][3];
+
+
 /** A grid of binary cell data. */
 typedef struct
 {

@@ -6,12 +6,14 @@
 #include <stdbool.h>
 #include <mpi.h>
 #include <math.h>
+#include "grid.h"
 
 #include "clockcycle.h"
 
+//use num_rows and num_cols from grid.h now
 // width/height/input file are hardcoded here for now while testing
-#define WIDTH 20
-#define HEIGHT 20
+//#define WIDTH 20
+//#define HEIGHT 20
 #define INPUT_FILE "test_board_3.txt"
 
 
@@ -19,6 +21,6 @@
 #define clock_frequency 512000000
 
 
-void run_pipelined(int my_rank, unsigned long num_steps);
+void run_pipelined(int my_rank, int HEIGHT, int WIDTH, unsigned long num_steps, const char* hc_config);
 
 #endif // PIPELINED_H
