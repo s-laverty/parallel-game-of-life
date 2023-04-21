@@ -882,6 +882,7 @@ int main(int argc, char *argv[])
                num_steps,
                grid_sizes[grid_size],
                world_size,
+               strategies[strategy],
                (double)(end - start) / clock_frequency);
 #endif
 
