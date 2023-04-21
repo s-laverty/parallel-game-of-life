@@ -25,6 +25,6 @@ taskset -c 0-159:4 mpirun -N 6 simulation -i acorn -s m brick 100
 
 # Large tests
 if [ $l = true ]; then
-taskset -c 0-159:4 mpirun -N 6 simulation -i acorn -s l brick 10
 taskset -c 0-159:4 mpirun -N 6 simulation -i acorn -s l striped 10
+taskset -c 0-159:4 mpirun -N 6 simulation -i acorn -s l brick 10
 fi

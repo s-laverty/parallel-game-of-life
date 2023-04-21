@@ -27,6 +27,6 @@ taskset -c 0-159:4 mpirun -N 6 simulation -i acorn -s l brick 10
 
 # xl tests
 if [[ $xl = true ]]; then
-taskset -c 0-159:4 mpirun -N 6 simulation -i acorn -s xl brick 1
 taskset -c 0-159:4 mpirun -N 6 simulation -i acorn -s xl striped 1
+taskset -c 0-159:4 mpirun -N 6 simulation -i acorn -s xl brick 1
 fi
