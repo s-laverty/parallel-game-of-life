@@ -12,9 +12,9 @@
 //TODO: use same interface as simulation.c for specifying the grid / outputting to a file
 //TODO: test performance to find best ROWS_PER_GPU, make it a cmd line arg?
 
-void cuda_init(bool** grid, bool** next_grid, int width, int height, int my_rank);
-void run_kernel(bool* grid, bool* next_grid, int width, int height);
-void run_kernel_section(bool* grid, bool* next_grid, int width, int height, int start_row, int end_row);
+void cuda_init(bool** grid, bool** next_grid,  unsigned long width,  unsigned long height, int my_rank);
+//void run_kernel(bool* grid, bool* next_grid,  unsigned long width,  unsigned long height);
+void run_kernel_section(bool* grid, bool* next_grid, unsigned long width, unsigned long height, int start_row, int end_row);
 void free_cudamemory(bool* grid, bool* next_grid);
 
 // this board template is just for convenient storage of 
@@ -35,10 +35,10 @@ bool grid_template[10][10] = {
 
 
 //file loading for testing purposes
-void load_input_file(char* filename, bool* grid, int HEIGHT, int WIDTH);
-void load_hardcode_config(const char* hc_config, bool* grid, int width, int height);
+void load_input_file(char* filename, bool* grid, unsigned long HEIGHT, unsigned long WIDTH);
+void load_hardcode_config(const char* hc_config, bool* grid, unsigned long width, unsigned long height);
 
-void run_pipelined(int my_rank, int HEIGHT, int WIDTH, unsigned long num_steps, const char* hc_config){
+void run_pipelined(int my_rank, unsigned long HEIGHT, unsigned long WIDTH, unsigned long num_steps, const char* hc_config){
 	int num_ranks;
 	MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
 	// Allocate memory
@@ -157,7 +157,7 @@ void run_pipelined(int my_rank, int HEIGHT, int WIDTH, unsigned long num_steps, 
 	if (my_rank == (num_steps-1) % num_ranks){
 		printf("Results:\n");
 		printf("- %lu simulations\n", num_steps);
-		printf("- grid size %d\n", WIDTH);
+		printf("- grid size %lu\n", WIDTH);
 		printf("- %d ranks\n", num_ranks);
 		printf("- pipeline strategy\n");
 		printf("- time taken to run: %lf\n", ((double)(end_cycles-start_cycles))/clock_frequency);
@@ -179,19 +179,33 @@ void run_pipelined(int my_rank, int HEIGHT, int WIDTH, unsigned long num_steps, 
 
 //for testing purposes 
 //load hardcode config
-void load_hardcode_config(const char* hc_config, bool* grid, int width, int height){
-	printf("%d %d %s\n", width, height, hc_config);
+void load_hardcode_config(const char* hc_config, bool* grid, unsigned long width, unsigned long height){
+	printf("%lu %lu %s\n", width, height, hc_config);
+
+	int type = 0;
+	if ( strncmp(hc_config, "acorn", 5)==0){
+		type = 1;
+	} else if (strncmp(hc_config, "beacon", 6)==0){
+		type = 2;
+	} else if(strncmp(hc_config, "beehive", 7)==0){
+		type = 3;
+	} else if (strncmp(hc_config, "glider", 6)==0){
+		type = 4;
+	} else if (strncmp(hc_config, "traffic-light", 13)==0){
+		type = 5;
+	} 
+
 	for(int r = 0; r < height; r++){
 		for(int c = 0; c < width; c++){
-			if ( strncmp(hc_config, "acorn", 5)==0 && r < 4 && c < 7){
+			if ( type == 1 && r < 4 && c < 7){
 				grid[r*width + c] = ACORN[r][c];
-			} else if (strncmp(hc_config, "beacon", 6)==0 && r < 4 && c < 4){
+			} else if (type == 2 && r < 4 && c < 4){
 				grid[r*width + c] = BEACON[r][c];
-			} else if(strncmp(hc_config, "beehive", 7)==0 && r < 3 && c < 4){
+			} else if(type == 3 && r < 3 && c < 4){
 				grid[r*width + c] = BEEHIVE[r][c];
-			} else if (strncmp(hc_config, "glider", 6)==0 && r < 3 && c < 3){
+			} else if (type == 4 && r < 3 && c < 3){
 				grid[r*width + c] = GLIDER[r][c];
-			} else if (strncmp(hc_config, "traffic-light", 13)==0 && r < 2 && c < 3){
+			} else if (type == 5 && r < 2 && c < 3){
 				grid[r*width + c] = TRAFFIC_LIGHT[r][c];
 			} else {
 				grid[r*width + c] = false;
@@ -211,7 +225,7 @@ void load_hardcode_config(const char* hc_config, bool* grid, int width, int heig
 
 // for testing purposes
 // load input file
-void load_input_file(char* filename, bool* grid, int HEIGHT, int WIDTH){
+void load_input_file(char* filename, bool* grid,  unsigned long HEIGHT,  unsigned long WIDTH){
 	// since each rank computes a separate generation,
 	// only rank 0 needs the initial grid
 

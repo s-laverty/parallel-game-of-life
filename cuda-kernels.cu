@@ -179,7 +179,7 @@ extern "C" void run_kernel(bool* grid, bool* next_grid, int width, int height){
  * @param start_row Index of row to start at
  * @param end_row Index of row to end at (inclusive), will wrap if end_row > height
  */
-__global__ void compute_timestep_section(bool* grid, bool* next_grid, int width, int height, int start_row, int end_row){
+__global__ void compute_timestep_section(bool* grid, bool* next_grid, unsigned long width, unsigned long height, int start_row, int end_row){
 	// Each thread the next state for 1 cell
 	unsigned int i = blockIdx.x*blockDim.x + threadIdx.x; 
 	unsigned int section_height = end_row-start_row+1;
@@ -221,7 +221,7 @@ __global__ void compute_timestep_section(bool* grid, bool* next_grid, int width,
  * @param start_row Row index to start at (inclusive)
  * @param end_row Row index to end at (inclusive)
  */
-extern "C" void run_kernel_section(bool* grid, bool* next_grid, int width, int height, int start_row, int end_row){
+extern "C" void run_kernel_section(bool* grid, bool* next_grid, unsigned long width, unsigned long height, int start_row, int end_row){
 	unsigned int grid_size = ceil((width*(end_row-start_row+1)) / (float)threads_per_block);
 	compute_timestep_section<<<grid_size, threads_per_block>>>(grid, next_grid, width, height, start_row, end_row);
 	cudaDeviceSynchronize();
@@ -235,7 +235,7 @@ extern "C" void run_kernel_section(bool* grid, bool* next_grid, int width, int h
  * @param next_grid Next timestep grid
  * @param my_rank Rank of MPI process
  */
-extern "C" void cuda_init(bool** grid, bool** next_grid, int width, int height, int my_rank){
+extern "C" void cuda_init(bool** grid, bool** next_grid, unsigned long width, unsigned long height, int my_rank){
   // set a CUDA device for each rank with minimal overlap in device usage
   int cudaDeviceCount;
   cudaError_t cE;

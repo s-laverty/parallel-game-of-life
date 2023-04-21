@@ -21,6 +21,6 @@
 #define clock_frequency 512000000
 
 
-void run_pipelined(int my_rank, int HEIGHT, int WIDTH, unsigned long num_steps, const char* hc_config);
+void run_pipelined(int my_rank, unsigned long HEIGHT, unsigned long WIDTH, unsigned long num_steps, const char* hc_config);
 
 #endif // PIPELINED_H
