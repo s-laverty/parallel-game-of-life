@@ -15,79 +15,25 @@
  * @param height Int pointer to receive height value.
  * @param width Int pointer to receive width value.
  * @param comm The current MPI environment.
+ * @param fh The MPI file.
  */
-int* loadFromFile(char* filename, int* height, int* width, MPI_Comm comm){
+int* loadFromFile(char* filename, int num_elements, MPI_Comm comm, MPI_File fh){
     int rank, size;
     MPI_Comm_rank(comm, &rank);
     MPI_Comm_size(comm, &size);
+    int elements_per_rank = num_elements/size;
+    int* buffer = (int*) malloc(elements_per_rank * sizeof(int));
 
-    // Read dimensions from file on rank 0
-    if (rank == 0) {
-        FILE* file = fopen(filename, "r");
-        if (file == NULL) {
-            fprintf(stderr, "Could not open file\n");
-            MPI_Abort(MPI_COMM_WORLD, 1);
-        }
-        fscanf(file, "%d %d", width, height);
-        fclose(file);
-        global_array = (int*) malloc(*height * *width * sizeof(int));
-    }
+    MPI_File_open(comm, filename, MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
 
-    // Broadcast dimensions to all processes
-    MPI_Bcast(height, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(width, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Offset offset = (MPI_Offset)(rank * elements_per_rank + (rank < remainder ? rank : remainder));
+    MPI_File_set_view(fh, offset, MPI_INT, MPI_INT, "native", MPI_INFO_NULL);
 
-    // Divide the work among processes
-    int rows_per_process = *height / size;
-    int start_row = rank * rows_per_process;
-    int end_row = start_row + rows_per_process;
-    if (rank == size - 1) {
-        end_row = *height;
-    }
+    MPI_File_read(fh, buf, num_rows * num_cols, MPI_INT, &status);
 
-    // Allocate memory for local array
-    int local_height = end_row - start_row;
-    int* local_array = (int*) malloc(local_height * *width * sizeof(int));
+    MPI_File_close(&fh);
 
-    // Read data from file into local array
-    FILE* file = fopen(filename, "r");
-    if (file == NULL) {
-        fprintf(stderr, "Could not open file\n");
-        MPI_Abort(MPI_COMM_WORLD, 1);
-        return NULL;
-    }
-    // Skip first line
-    fscanf(file, "%*[^\n]\n");
-    // Skip lines before start_row
-    for (int i = 0; i < start_row; i++) {
-        fscanf(file, "%*[^\n]\n");
-    }
-    // Read lines into local array
-    for (int i = 0; i < local_height; i++) {
-        for (int j = 0; j < *width; j++) {
-            fscanf(file, "%d", &local_array[i**width+j]);
-        }
-        fscanf(file, "\n");
-    }
-    fclose(file);
-
-    // Gather local arrays into global array on rank 0
-    int* recv_counts = (int*) malloc(size * sizeof(int));
-    int* displacements = (int*) malloc(size * sizeof(int));
-    for (int i = 0; i < size; i++) {
-        recv_counts[i] = (*height / size) * *width;
-        displacements[i] = i * recv_counts[i];
-    }
-    MPI_Gatherv(local_array, local_height * *width, MPI_INT,
-                global_array, recv_counts, displacements, MPI_INT,
-                0, MPI_COMM_WORLD);
-
-    // Free memory
-    free(local_array);
-    free(recv_counts);
-    free(displacements);
-
-    return local_array;
+    return buffer;
 }
 
 /**
@@ -122,7 +68,7 @@ void saveToFile(char* filename, int* array, int num_elements, MPI_Comm comm) {
     // Write the array to the file
     MPI_Offset offset = (MPI_Offset)(rank * elements_per_rank + (rank < remainder ? rank : remainder));
     MPI_File_seek(file, offset * sizeof(int) + sizeof(char) * 256, MPI_SEEK_SET);
-    MPI_File_write(file, array, my_elements, MPI_INT, MPI_STATUS_IGNORE);
+    MPI_File_write(file, array, num_elements, MPI_INT, MPI_STATUS_IGNORE);
 
     // Close the file and free memory
     MPI_File_close(&file);
