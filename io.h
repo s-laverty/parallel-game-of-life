@@ -10,8 +10,8 @@
 
 #define FILENAME "temp.txt"
 
-void saveToFile(char* filename, int* array, int width, int height, MPI_Comm comm);
-int* loadFromFile(char* filename, int* height, int* width, MPI_Comm comm);
+void saveToFile(char* filename, int* array, int num_elements, MPI_Comm comm);
+int* loadFromFile(char* filename, int num_elements, MPI_Comm comm, MPI_File file);
 
 
 #endif //IO_H
