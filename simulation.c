@@ -549,14 +549,14 @@ bool get_view_brick(GridView *view,
  * @brief Copy a portion of an initialization buffer to the view's data buffer.
  *
  * @param view A view of the global data grid.
- * @param config An initialization buffer.
+ * @param buf An initialization buffer.
  * @param row_start The global row start index of the initialization buffer.
  * @param col_start The global column start index of the initialization buffer.
  * @param height The number of rows of the initialization buffer.
  * @param width The number of columns of the initialization buffer.
  */
 void init_view(GridView *view,
-               Cell_t const *config,
+               Cell_t const *buf,
                size_t row_start,
                size_t col_start,
                size_t height,
@@ -579,11 +579,139 @@ void init_view(GridView *view,
         size_t length = col_overlap_end - col_overlap_start;
         for (size_t i = row_overlap_start; i < row_overlap_end; i++)
             set_row(&view->grid,
-                    config + (i - row_start) * width + col_overlap_start - col_start,
+                    buf + (i - row_start) * width + col_overlap_start - col_start,
                     1 + i - view->row_start,
                     1 + col_overlap_start - view->col_start,
                     length);
     }
+}
+
+/**
+ * @brief
+ *
+ * @param view
+ * @param grid_height
+ * @param grid_width
+ * @param comm
+ * @param fname
+ * @return true
+ * @return false
+ */
+bool load_grid_view(GridView *view,
+                    size_t grid_height,
+                    size_t grid_width,
+                    MPI_Comm comm,
+                    char const *fname)
+{
+    // Open file
+    int rank;
+    MPI_Comm_rank(comm, &rank);
+    MPI_File file;
+    // TODO error checking lol
+    MPI_File_open(comm, fname, MPI_MODE_RDONLY, MPI_INFO_NULL, &file);
+    // Cell_t *buf = malloc(view->height * view->width * sizeof(Cell_t));
+    MPI_Offset start_offset = grid_width * view->row_start + view->col_start;
+    MPI_File_set_view(file,
+                      start_offset,
+                      MPI_CELL_Datatype,
+                      MPI_CELL_Datatype,
+                      "native",
+                      MPI_INFO_NULL);
+    if (view->col_start + view->width > grid_width)
+    {
+        // Wrapping along left-right
+        size_t right_len = (view->col_start + view->width) - grid_width;
+        size_t left_len = view->width - right_len;
+        for (size_t row = 0; row < view->height; view++)
+        {
+            MPI_File_read_at(file,
+                             row * grid_width,
+                             row_ptr(&view->grid, row),
+                             right_len,
+                             MPI_CELL_Datatype,
+                             MPI_STATUS_IGNORE);
+            MPI_File_read_at(file,
+                             (start_offset - view->col_start) + (row * grid_width),
+                             row_ptr(&view->grid, row) + right_len,
+                             left_len,
+                             MPI_CELL_Datatype,
+                             MPI_STATUS_IGNORE);
+        }
+    }
+    else
+        // No wrapping
+        for (size_t row = 0; row < view->height; view++)
+            MPI_File_read_at(file,
+                             row * grid_width,
+                             row_ptr(&view->grid, row),
+                             view->width,
+                             MPI_CELL_Datatype,
+                             MPI_STATUS_IGNORE);
+    return true;
+}
+
+/**
+ * @brief
+ *
+ * @param view
+ * @param grid_height
+ * @param grid_width
+ * @param comm
+ * @param fname
+ * @return true
+ * @return false
+ */
+bool save_grid_view(GridView *view,
+                    size_t grid_height,
+                    size_t grid_width,
+                    MPI_Comm comm,
+                    char const *fname)
+{
+    // Open file
+    int rank;
+    MPI_Comm_rank(comm, &rank);
+    MPI_File file;
+    // TODO error checking lol
+    MPI_File_open(comm, fname, MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &file);
+    // Cell_t *buf = malloc(view->height * view->width * sizeof(Cell_t));
+    MPI_Offset start_offset = grid_width * view->row_start + view->col_start;
+    MPI_File_set_view(file,
+                      start_offset,
+                      MPI_CELL_Datatype,
+                      MPI_CELL_Datatype,
+                      "native",
+                      MPI_INFO_NULL);
+    if (view->col_start + view->width > grid_width)
+    {
+        // Wrapping along left-right
+        size_t right_len = (view->col_start + view->width) - grid_width;
+        size_t left_len = view->width - right_len;
+        for (size_t row = 0; row < view->height; view++)
+        {
+            MPI_File_write_at(file,
+                              row * grid_width,
+                              row_ptr(&view->grid, row),
+                              right_len,
+                              MPI_CELL_Datatype,
+                              MPI_STATUS_IGNORE);
+            MPI_File_write_at(file,
+                              (start_offset - view->col_start) + (row * grid_width),
+                              row_ptr(&view->grid, row) + right_len,
+                              left_len,
+                              MPI_CELL_Datatype,
+                              MPI_STATUS_IGNORE);
+        }
+    }
+    else
+        // No wrapping
+        for (size_t row = 0; row < view->height; view++)
+            MPI_File_write_at(file,
+                              row * grid_width,
+                              row_ptr(&view->grid, row),
+                              view->width,
+                              MPI_CELL_Datatype,
+                              MPI_STATUS_IGNORE);
+    return true;
 }
 
 int main(int argc, char *argv[])
@@ -765,20 +893,20 @@ int main(int argc, char *argv[])
         exchange_fn = (exchange_fn_ptr)exchange_border_cells_brick;
         break;
     case STRAT_PIPELINE:
-        run_pipelined(world_rank, grid_sizes[grid_size], grid_sizes[grid_size], num_steps, hardcode_configs[hc_config]); //re-route to pipelined implementation in pipeline.c
+        run_pipelined(world_rank, grid_sizes[grid_size], grid_sizes[grid_size], num_steps, hardcode_configs[hc_config]); // re-route to pipelined implementation in pipeline.c
         MPI_Finalize();
         return EXIT_SUCCESS;
     default:
         return EXIT_FAILURE;
     }
 #ifdef DEBUG
-    if (!get_view_fn(&view, &neighbors, NUM_COLS_DEBUG, NUM_ROWS_DEBUG))
+    size_t grid_height = NUM_ROWS_DEBUG;
+    size_t grid_width = NUM_COLS_DEBUG;
 #else
-    if (!get_view_fn(&view,
-                     &neighbors,
-                     (weak_scaling) ? grid_sizes[grid_size] / MAX_RANKS * world_size : grid_sizes[grid_size],
-                     grid_sizes[grid_size]))
+    size_t grid_height = (weak_scaling) ? grid_sizes[grid_size] / MAX_RANKS * world_size : grid_sizes[grid_size];
+    size_t grid_width = grid_sizes[grid_size];
 #endif
+    if (!get_view_fn(&view, &neighbors, grid_height, grid_width))
     {
         fprintf(stderr,
                 "Invalid number of ranks for %s fragmentation strategy\n",
@@ -819,6 +947,7 @@ int main(int argc, char *argv[])
     }
     memset(view.grid.data, 0, view.grid.width * view.grid.height * sizeof(Cell_t));
 #endif
+    uint64_t load_start, load_end;
     switch (hc_config)
     {
     case HC_CONFIG_ACORN:
@@ -837,7 +966,9 @@ int main(int argc, char *argv[])
         init_view(&view, &TRAFFIC_LIGHT[0][0], 0, 0, 2, 3);
         break;
     case HC_CONFIG_NONE:
-        // TODO load checkpoint
+        load_start = clock_now();
+        load_grid_view(&view, grid_height, grid_width, MPI_COMM_WORLD, load_checkpoint);
+        load_end = clock_now();
         break;
     default:
         return EXIT_FAILURE;
@@ -883,20 +1014,32 @@ int main(int argc, char *argv[])
 
 #ifdef DEBUG
     fclose(f);
-#else
-    if (!world_rank)
-        printf("Results:\n- %lu simulations\n- grid size %zu%s\n- %d ranks\n- %s strategy\n- time taken to run: %.6f\n",
-               num_steps,
-               grid_sizes[grid_size],
-               (weak_scaling) ? " (weak scaling)" : "",
-               world_size,
-               strategies[strategy],
-               (double)(end - start) / clock_frequency);
 #endif
 
     // TODO save results to file
+    uint64_t save_start, save_end;
+    if (save_checkpoint != NULL)
+    {
+        save_start = clock_now();
+        save_grid_view(&view, grid_height, grid_width, MPI_COMM_WORLD, save_checkpoint);
+        save_end = clock_now();
+    }
 
     free_cudamem_gridview(&view);
+
+    if (!world_rank)
+    {
+        printf("Results:\n");
+        printf("- %lu simulations\n", num_steps);
+        printf("- grid size %zu%s\n", grid_sizes[grid_size], (weak_scaling) ? " (weak scaling)" : "");
+        printf("- %d ranks\n", world_size);
+        printf("- %s strategy\n", strategies[strategy]);
+        printf("- time taken to run: %.6f\n", (double)(end - start) / clock_frequency);
+        if (load_checkpoint)
+            printf("- load time %.6f\n", (double)(load_end - load_start) / clock_frequency);
+        if (save_checkpoint)
+            printf("- save time %.6f\n", (double)(save_end - save_start) / clock_frequency);
+    }
 
     MPI_Finalize();
 
