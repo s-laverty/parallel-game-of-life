@@ -22,6 +22,8 @@ extern void cuda_init_gridview(GridView *grid, int my_rank);
 extern void run_kernel_nowrap(GridView *grid);
 extern void free_cudamem_gridview(GridView *grid);
 
+#define MAX_RANKS 96
+
 #ifndef DEBUG
 
 #define MPI_CELL_Datatype MPI_C_BOOL
@@ -633,7 +635,6 @@ int main(int argc, char *argv[])
         GRID_SIZE_XXL,
         GRID_SIZE_MAX,
     };
-#ifndef DEBUG
     /** Grid size array. */
     static size_t const grid_sizes[] = {
         [GRID_SIZE_SMALL] = 4096,   // 2^12
@@ -641,7 +642,6 @@ int main(int argc, char *argv[])
         [GRID_SIZE_LARGE] = 262144, // 2^18
         [GRID_SIZE_XXL] = 1048576,  // 2^20
     };
-#endif
     /** Grid size CLI names. */
     static char const *grid_size_names[] = {
         [GRID_SIZE_SMALL] = "s",
@@ -654,7 +654,7 @@ int main(int argc, char *argv[])
     /** Function pointer to border exchange function. */
     typedef void (*exchange_fn_ptr)(GridView *, union neighbors const *);
     /** Argument parse error string. */
-    static char const *arg_parse_err = "Usage: %s [-l checkpoint] [-o checkpoint] [-i hardcode_initializer] [-s grid_size] strategy num_steps\n";
+    static char const *arg_parse_err = "Usage: %s [-l checkpoint] [-o checkpoint] [-i hardcode_initializer] [-s grid_size] [-w] strategy num_steps\n";
 
     MPI_Init(&argc, &argv);
 
@@ -663,8 +663,9 @@ int main(int argc, char *argv[])
     char const *save_checkpoint = NULL;
     enum hardcode_config hc_config = HC_CONFIG_NONE;
     enum grid_size grid_size = GRID_SIZE_MEDIUM;
+    bool weak_scaling = false;
     int opt;
-    while ((opt = getopt(argc, argv, "l:o:i:s:")) != -1)
+    while ((opt = getopt(argc, argv, "l:o:i:s:w")) != -1)
     {
         switch (opt)
         {
@@ -699,6 +700,9 @@ int main(int argc, char *argv[])
                         fprintf(stderr, "  %s\n", grid_size_names[grid_size]);
                     return EXIT_FAILURE;
                 }
+            break;
+        case 'w':
+            weak_scaling = true;
             break;
         default:
             fprintf(stderr, arg_parse_err, argv[0]);
@@ -770,7 +774,10 @@ int main(int argc, char *argv[])
 #ifdef DEBUG
     if (!get_view_fn(&view, &neighbors, NUM_COLS_DEBUG, NUM_ROWS_DEBUG))
 #else
-    if (!get_view_fn(&view, &neighbors, grid_sizes[grid_size], grid_sizes[grid_size]))
+    if (!get_view_fn(&view,
+                     &neighbors,
+                     (weak_scaling) ? grid_sizes[grid_size] / MAX_RANKS * world_size : grid_sizes[grid_size],
+                     grid_sizes[grid_size]))
 #endif
     {
         fprintf(stderr,
@@ -878,9 +885,10 @@ int main(int argc, char *argv[])
     fclose(f);
 #else
     if (!world_rank)
-        printf("Results:\n- %lu simulations\n- grid size %zu\n- %d ranks\n- %s strategy\n- time taken to run: %.6f\n",
+        printf("Results:\n- %lu simulations\n- grid size %zu%s\n- %d ranks\n- %s strategy\n- time taken to run: %.6f\n",
                num_steps,
                grid_sizes[grid_size],
+               (weak_scaling) ? " (weak scaling)" : "",
                world_size,
                strategies[strategy],
                (double)(end - start) / clock_frequency);
