@@ -20,7 +20,6 @@ int* loadFromFile(char* filename, int* height, int* width, MPI_Comm comm){
     int rank, size;
     MPI_Comm_rank(comm, &rank);
     MPI_Comm_size(comm, &size);
-    int* global_array = NULL;
 
     // Read dimensions from file on rank 0
     if (rank == 0) {
@@ -88,7 +87,7 @@ int* loadFromFile(char* filename, int* height, int* width, MPI_Comm comm){
     free(recv_counts);
     free(displacements);
 
-    return global_array;
+    return local_array;
 }
 
 /**
@@ -96,68 +95,35 @@ int* loadFromFile(char* filename, int* height, int* width, MPI_Comm comm){
  *
  * @param filename The name of the file to save into.
  * @param array The array of ints that will be saved.
- * @param width The width of the array.
- * @param height The height of the array.
+ * @param num_elements Size of the total array.
  * @param comm The MPI environment.
  */
-void saveToFile(char* filename, int* array, int width, int height, MPI_Comm comm) {
+void saveToFile(char* filename, int* array, int num_elements, MPI_Comm comm) {
     int rank, size;
     MPI_Comm_rank(comm, &rank);
     MPI_Comm_size(comm, &size);
 
-    int num_elements = width * height;
     int elements_per_rank = num_elements / size;
     int remainder = num_elements % size;
 
-    // Determine the number of elements each rank will write to the file
-    int my_elements = elements_per_rank;
-    if (rank < remainder) {
-        my_elements++;
-    }
-
-    // Allocate memory for the portion of the array this rank will write
-    int* my_array = (int*)malloc(my_elements * sizeof(int));
-    int i, k = 0;
-    for (i = rank; i < num_elements; i += size) {
-        my_array[k++] = array[i];
-    }
 
     // Open the file for writing
     MPI_File file;
     MPI_File_open(comm, filename, MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &file);
 
-    // Write the width and height to the first line of the file
+    /*/ Write the width and height to the first line of the file
+     * Commented out as the file format most likely doesn't require this
     if (rank == 0) {
         char dimensions[256];
         snprintf(dimensions, 256, "%d %d\n", width, height);
         MPI_File_write(file, dimensions, strlen(dimensions), MPI_CHAR, MPI_STATUS_IGNORE);
-    }
+    }*/
 
     // Write the array to the file
     MPI_Offset offset = (MPI_Offset)(rank * elements_per_rank + (rank < remainder ? rank : remainder));
     MPI_File_seek(file, offset * sizeof(int) + sizeof(char) * 256, MPI_SEEK_SET);
-    MPI_File_write(file, my_array, my_elements, MPI_INT, MPI_STATUS_IGNORE);
+    MPI_File_write(file, array, my_elements, MPI_INT, MPI_STATUS_IGNORE);
 
     // Close the file and free memory
     MPI_File_close(&file);
-    free(my_array);
-}
-
-int main(int argc, char** argv) {
-    MPI_Init(&argc, &argv);
-
-    char* filename = FILENAME;
-    int width = 7;
-    int height = 3;
-    int array[3][7] = {
-            {0, 1, 0, 0, 0, 0, 0},
-            {0, 0, 0, 1, 0, 0, 0},
-            {1, 1, 0, 0, 1, 1, 1},
-    };
-
-    saveToFile(filename, array, width, height, MPI_COMM_WORLD);
-
-    MPI_Finalize();
-    printf("hi :)\n");
-    return 0;
 }
