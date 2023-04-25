@@ -587,15 +587,15 @@ void init_view(GridView *view,
 }
 
 /**
- * @brief
+ * @brief Load a view of the global data grid from a file.
  *
- * @param view
- * @param grid_height
- * @param grid_width
- * @param comm
- * @param fname
- * @return true
- * @return false
+ * @param view The grid view.
+ * @param grid_height The height of the global data grid.
+ * @param grid_width The width of the global data grid.
+ * @param comm The communicator shared with other grid views.
+ * @param fname The name of the file to load data from.
+ * @return true upon success.
+ * @return false upon failure.
  */
 bool load_grid_view(GridView *view,
                     size_t grid_height,
@@ -676,15 +676,15 @@ bool load_grid_view(GridView *view,
 }
 
 /**
- * @brief
+ * @brief Save a view of the global data grid to a file.
  *
- * @param view
- * @param grid_height
- * @param grid_width
- * @param comm
- * @param fname
- * @return true
- * @return false
+ * @param view The grid view.
+ * @param grid_height The height of the global data grid.
+ * @param grid_width The width of the global data grid.
+ * @param comm The communicator shared with other grid views.
+ * @param fname The name of the file to save data to.
+ * @return true upon success.
+ * @return false upon failure.
  */
 bool save_grid_view(GridView const *view,
                     size_t grid_height,
