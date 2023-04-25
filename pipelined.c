@@ -9,11 +9,7 @@
  */
 #include "pipelined.h"
 
-//TODO: use same interface as simulation.c for specifying the grid / outputting to a file
-//TODO: test performance to find best ROWS_PER_GPU, make it a cmd line arg?
-
 void cuda_init(bool** grid, bool** next_grid,  unsigned long width,  unsigned long height, int my_rank);
-//void run_kernel(bool* grid, bool* next_grid,  unsigned long width,  unsigned long height);
 void run_kernel_section(bool* grid, bool* next_grid, unsigned long width, unsigned long height, int start_row, int end_row);
 void free_cudamemory(bool* grid, bool* next_grid);
 
@@ -51,10 +47,22 @@ void run_pipelined(int my_rank, unsigned long HEIGHT, unsigned long WIDTH, unsig
 		//char filename[] = INPUT_FILE; 
 		//load_input_file(filename, grid, HEIGHT, WIDTH);	
 		load_hardcode_config(hc_config, grid, WIDTH, HEIGHT);
-
+		printf("data loaded\n");
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
+
+
+    MPI_Datatype continuous_type = MPI_C_BOOL;;
+    int elements_per_datatype = 1;
+    if (WIDTH > INT_MAX){
+    	// we cannot send more than 2^32 elements via MPI
+		// so create a continuous datatype and send that instead
+    	elements_per_datatype = 1024; //2^10
+    	MPI_Type_contiguous(elements_per_datatype, MPI_C_BOOL, &continuous_type);
+    	MPI_Type_commit(&continuous_type);
+    } 
+
 
 	// start clock
 	unsigned long long start_cycles=clock_now(); // dummy clock reads to init
@@ -62,19 +70,19 @@ void run_pipelined(int my_rank, unsigned long HEIGHT, unsigned long WIDTH, unsig
 	start_cycles = clock_now();
 
 	// begin game of life simulation
-	unsigned int iters = ceil((double)HEIGHT/ROWS_PER_GPU); //# iterations for this rank for a single generation
-	int my_t = 0; // time step for this rank in this generation
+	unsigned long iters = ceil((double)HEIGHT/ROWS_PER_GPU); //# iterations for this rank for a single generation
+	unsigned long my_t = 0; // time step for this rank in this generation
 	int gen = my_rank; // generation this rank is currently computing
 	int wasted_time = iters-(2*num_ranks); // num wasted time slots between generations when reusing ranks
 	if (wasted_time < 0) wasted_time = 0;
-	int start_t = (gen/num_ranks)*wasted_time + 2*gen; //start time for this generation
+	unsigned long start_t = (gen/num_ranks)*wasted_time + 2*gen; //start time for this generation
 	int next_rank = (my_rank+1) % num_ranks; // next rank in line, wraps around
 	int prev_rank = (my_rank-1+num_ranks) % num_ranks;
-	int row_start = 0; 
-	int row_end = 0;
+	unsigned long row_start = 0; 
+	unsigned long row_end = 0;
 	MPI_Status* status = NULL;
 	MPI_Request req;
-	for(int t = 0; t < (num_steps-1)*2 + iters; t++){
+	for(unsigned long t = 0; t < (num_steps-1)*2 + iters; t++){
 		// if there are extra ranks, we don't need them to do anything
 		if (my_rank > num_steps){
 			break;
@@ -85,7 +93,6 @@ void run_pipelined(int my_rank, unsigned long HEIGHT, unsigned long WIDTH, unsig
 
 		// if this rank has something to calculate this time step
 		if(t >= start_t && my_t < iters){ 
-
 			// Receive data from previous rank
 			if (gen != 0 && my_t < iters-1){
 				// have an extra section to receive if we are at the first t
@@ -94,11 +101,11 @@ void run_pipelined(int my_rank, unsigned long HEIGHT, unsigned long WIDTH, unsig
 					row_end = row_start+ROWS_PER_GPU-1;
 					
 					if (row_end >= HEIGHT){ //rows wrap around so it was sent in 2 chunks
-						MPI_Recv(grid+WIDTH*row_start, WIDTH*(HEIGHT-row_start), MPI_C_BOOL,prev_rank, 0, MPI_COMM_WORLD, status);
-						MPI_Recv(grid, WIDTH*((row_end-row_start+1)-(HEIGHT-row_start)), MPI_C_BOOL, prev_rank, 0, MPI_COMM_WORLD, status);
+						MPI_Recv(grid+WIDTH*row_start, WIDTH*(HEIGHT-row_start)/elements_per_datatype, continuous_type,prev_rank, 0, MPI_COMM_WORLD, status);
+						MPI_Recv(grid, WIDTH*((row_end-row_start+1)-(HEIGHT-row_start))/elements_per_datatype, continuous_type, prev_rank, 0, MPI_COMM_WORLD, status);
 					}
 					else{ // don't have to wrap around
-						MPI_Recv(grid+WIDTH*row_start, WIDTH*(row_end-row_start+1), MPI_C_BOOL, prev_rank, 0, MPI_COMM_WORLD, status);
+						MPI_Recv(grid+WIDTH*row_start, WIDTH*(row_end-row_start+1)/elements_per_datatype, continuous_type, prev_rank, 0, MPI_COMM_WORLD, status);
 					}
 					//printf("Rank %d receives rows %d to %d from %d at t=%d\n", my_rank, row_start, row_end, prev_rank, t);
 				}
@@ -111,11 +118,11 @@ void run_pipelined(int my_rank, unsigned long HEIGHT, unsigned long WIDTH, unsig
 					row_end = row_start+(HEIGHT % ROWS_PER_GPU)-1;
 				
 				if (row_end >= HEIGHT){ //rows wrap around so it was sent in 2 chunks
-					MPI_Recv(grid+WIDTH*row_start, WIDTH*(HEIGHT-row_start), MPI_C_BOOL,prev_rank, 0, MPI_COMM_WORLD, status);
-					MPI_Recv(grid, WIDTH*((row_end-row_start+1)-(HEIGHT-row_start)), MPI_C_BOOL, prev_rank, 0, MPI_COMM_WORLD, status);
+					MPI_Recv(grid+WIDTH*row_start, WIDTH*(HEIGHT-row_start)/elements_per_datatype, continuous_type,prev_rank, 0, MPI_COMM_WORLD, status);
+					MPI_Recv(grid, WIDTH*((row_end-row_start+1)-(HEIGHT-row_start))/elements_per_datatype, continuous_type, prev_rank, 0, MPI_COMM_WORLD, status);
 				}
 				else{ // don't have to wrap around
-					MPI_Recv(grid+WIDTH*row_start, WIDTH*(row_end-row_start+1), MPI_C_BOOL, prev_rank, 0, MPI_COMM_WORLD, status);
+					MPI_Recv(grid+WIDTH*row_start, WIDTH*(row_end-row_start+1)/elements_per_datatype, continuous_type, prev_rank, 0, MPI_COMM_WORLD, status);
 				}
 				//printf("Rank %d receives rows %d to %d from %d at t=%d\n", my_rank, row_start, row_end, prev_rank, t);
 			}
@@ -132,11 +139,11 @@ void run_pipelined(int my_rank, unsigned long HEIGHT, unsigned long WIDTH, unsig
 			if (gen+1 < num_steps){
 				//printf("Rank %d sends rows %d to %d to rank %d at t=%d\n",  my_rank, row_start, row_end, next_rank, t);
 				if (row_end >= HEIGHT){ //rows wrap around so must send in 2 chunks
-					MPI_Isend(next_grid+WIDTH*row_start, WIDTH*(HEIGHT-row_start), MPI_C_BOOL, next_rank, 0, MPI_COMM_WORLD, &req);
-					MPI_Isend(next_grid, WIDTH*((row_end-row_start+1)-(HEIGHT-row_start)), MPI_C_BOOL, next_rank, 0, MPI_COMM_WORLD, &req);
+					MPI_Isend(next_grid+WIDTH*row_start, WIDTH*(HEIGHT-row_start)/elements_per_datatype, continuous_type, next_rank, 0, MPI_COMM_WORLD, &req);
+					MPI_Isend(next_grid, WIDTH*((row_end-row_start+1)-(HEIGHT-row_start))/elements_per_datatype, continuous_type, next_rank, 0, MPI_COMM_WORLD, &req);
 				}
 				else{ // don't have to wrap around
-					MPI_Isend(next_grid+WIDTH*row_start, WIDTH*(row_end-row_start+1), MPI_C_BOOL, next_rank, 0, MPI_COMM_WORLD, &req);
+					MPI_Isend(next_grid+WIDTH*row_start, WIDTH*(row_end-row_start+1)/elements_per_datatype, continuous_type, next_rank, 0, MPI_COMM_WORLD, &req);
 				}
 			}
 			my_t++;
@@ -162,18 +169,6 @@ void run_pipelined(int my_rank, unsigned long HEIGHT, unsigned long WIDTH, unsig
 		printf("- pipeline strategy\n");
 		printf("- time taken to run: %lf\n", ((double)(end_cycles-start_cycles))/clock_frequency);
 	}
-
-	// Print output
-	/*if (my_rank == (num_steps-1) % num_ranks){
-		printf("\nRank %d output (%lu generations have passed)\n", my_rank, num_steps);
-		for(int r = 0; r < HEIGHT; r++){
-			for(int c = 0; c < WIDTH; c++){
-				printf("%d ", next_grid[r*WIDTH + c]);
-			}
-			printf("\n");
-		}	
-	}*/
-
 	free_cudamemory(grid, next_grid);
 }
 
@@ -226,7 +221,6 @@ void load_hardcode_config(const char* hc_config, bool* grid, unsigned long width
 
 }
 
-// for testing purposes
 // load input file
 void load_input_file(char* filename, bool* grid,  unsigned long HEIGHT,  unsigned long WIDTH){
 	// since each rank computes a separate generation,
@@ -250,11 +244,12 @@ void load_input_file(char* filename, bool* grid,  unsigned long HEIGHT,  unsigne
 	fclose(fp);
 
 	//test print
+	/*
 	printf("INPUT:\n");
 	for(int r = 0; r < HEIGHT; r++){
 		for(int c = 0; c < WIDTH; c++){
 			printf("%d ", grid[r*WIDTH + c]);
 		}
 		printf("\n");
-	}	
+	}	*/
 }
