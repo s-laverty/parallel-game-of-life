@@ -647,6 +647,7 @@ bool load_grid_view(GridView *view,
                              view->width,
                              MPI_CELL_Datatype,
                              MPI_STATUS_IGNORE);
+    MPI_File_close(&file);
     return true;
 }
 
@@ -711,6 +712,7 @@ bool save_grid_view(GridView *view,
                               view->width,
                               MPI_CELL_Datatype,
                               MPI_STATUS_IGNORE);
+    MPI_File_close(&file);
     return true;
 }
 
