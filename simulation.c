@@ -604,23 +604,39 @@ bool load_grid_view(GridView *view,
                     char const *fname)
 {
     // Open file
-    int rank;
-    MPI_Comm_rank(comm, &rank);
     MPI_File file;
-    // TODO error checking lol
-    MPI_File_open(comm, fname, MPI_MODE_RDONLY, MPI_INFO_NULL, &file);
+    if (MPI_File_open(comm, fname, MPI_MODE_RDONLY, MPI_INFO_NULL, &file))
+        return false;
     MPI_File_set_view(file,
                       grid_width * view->row_start + view->col_start,
                       MPI_CELL_Datatype,
                       MPI_CELL_Datatype,
                       "native",
                       MPI_INFO_NULL);
+    // Perform as much collective I/O as possible
+    size_t comm_height;
+    MPI_Allreduce(&view->height, &comm_height, 1, MPI_UNSIGNED_LONG, MPI_MIN, comm);
     if (view->col_start + view->width > grid_width)
     {
         // Wrapping from right to left edge
         size_t right_len = grid_width - view->col_start;
         size_t left_len = view->width - right_len;
-        for (size_t row = 0; row < view->height; row++)
+        for (size_t row = 0; row < comm_height; row++)
+        {
+            MPI_File_read_at_all(file,
+                                 row * grid_width,
+                                 row_ptr(&view->grid, row),
+                                 right_len,
+                                 MPI_CELL_Datatype,
+                                 MPI_STATUS_IGNORE);
+            MPI_File_read_at_all(file,
+                                 row * grid_width - view->col_start,
+                                 row_ptr(&view->grid, row) + right_len,
+                                 left_len,
+                                 MPI_CELL_Datatype,
+                                 MPI_STATUS_IGNORE);
+        }
+        for (size_t row = comm_height; row < view->height; row++)
         {
             MPI_File_read_at(file,
                              row * grid_width,
@@ -637,15 +653,25 @@ bool load_grid_view(GridView *view,
         }
     }
     else
+    {
         // No wrapping
-        for (size_t row = 0; row < view->height; row++)
-            MPI_File_read_at(file,
-                             row * grid_width,
-                             row_ptr(&view->grid, row),
-                             view->width,
-                             MPI_CELL_Datatype,
-                             MPI_STATUS_IGNORE);
+        for (size_t row = 0; row < comm_height; row++)
+            MPI_File_write_at_all(file,
+                                  row * grid_width,
+                                  row_ptr(&view->grid, row),
+                                  view->width,
+                                  MPI_CELL_Datatype,
+                                  MPI_STATUS_IGNORE);
+        for (size_t row = comm_height; row < view->height; row++)
+            MPI_File_write_at(file,
+                              row * grid_width,
+                              row_ptr(&view->grid, row),
+                              view->width,
+                              MPI_CELL_Datatype,
+                              MPI_STATUS_IGNORE);
+    }
     MPI_File_close(&file);
+    return true;
     return true;
 }
 
@@ -667,17 +693,16 @@ bool save_grid_view(GridView const *view,
                     char const *fname)
 {
     // Open file
-    int rank;
-    MPI_Comm_rank(comm, &rank);
     MPI_File file;
-    // TODO error checking lol
-    MPI_File_open(comm, fname, MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &file);
+    if (MPI_File_open(comm, fname, MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &file))
+        return false;
     MPI_File_set_view(file,
                       grid_width * view->row_start + view->col_start,
                       MPI_CELL_Datatype,
                       MPI_CELL_Datatype,
                       "native",
                       MPI_INFO_NULL);
+    // Perform as much collective I/O as possible
     size_t comm_height;
     MPI_Allreduce(&view->height, &comm_height, 1, MPI_UNSIGNED_LONG, MPI_MIN, comm);
     if (view->col_start + view->width > grid_width)
